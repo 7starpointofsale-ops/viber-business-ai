@@ -10,12 +10,12 @@ const PORT = process.env.PORT || 3000;
 const TOKEN = process.env.VIBER_TOKEN;
 
 // ===============================
-// USER SESSION
+// USER SESSION MEMORY
 // ===============================
 const sessions = {};
 
 // ===============================
-// MYANMAR NUMBER SUPPORT
+// MYANMAR NUMBER CONVERT
 // ===============================
 function mmToEng(text = "") {
   const map = {
@@ -31,7 +31,7 @@ function mmToEng(text = "") {
     "၉": "9"
   };
 
-  return text.replace(/[၀-၉]/g, s => map[s]);
+  return text.replace(/[၀-၉]/g, m => map[m]);
 }
 
 // ===============================
@@ -51,7 +51,7 @@ async function sendMessage(userId, text) {
       {
         receiver: userId,
         type: "text",
-        text
+        text: text
       },
       {
         headers: {
@@ -68,41 +68,31 @@ async function sendMessage(userId, text) {
 // FIND PRODUCT
 // ===============================
 function findProduct(name, gsm = "") {
-  const matches = products.filter(
-    p => p.name.toLowerCase() === name.toLowerCase()
-  );
-
-  if (matches.length === 0) return null;
-
-  if (gsm) {
-    return matches.find(
-      p => p.gsm.toLowerCase() === gsm.toLowerCase()
-    );
-  }
-
-  if (matches.length === 1) return matches[0];
-
-  return {
-    needGsm: true,
-    options: matches
-  };
+  return products.find(p => {
+    const nameMatch = p.name.toLowerCase() === name.toLowerCase();
+    const gsmMatch = gsm ? p.gsm.toLowerCase() === gsm.toLowerCase() : true;
+    return nameMatch && gsmMatch;
+  });
 }
 
 // ===============================
-// PRICE ENGINE
+// GET UNIT PRICE BY QTY
 // ===============================
 function getUnitPrice(product, qty) {
-  if (qty >= 300 && product.prices["300"]) return product.prices["300"];
-  if (qty >= 200 && product.prices["200"]) return product.prices["200"];
-  if (qty >= 100 && product.prices["100"]) return product.prices["100"];
-  return product.prices["1"];
+  const priceTable = product.prices;
+
+  if (qty >= 300 && priceTable["300"]) return priceTable["300"];
+  if (qty >= 200 && priceTable["200"]) return priceTable["200"];
+  if (qty >= 100 && priceTable["100"]) return priceTable["100"];
+
+  return priceTable["1"];
 }
 
 // ===============================
-// PARSE ORDER
+// SMART PARSE INPUT
 // ===============================
-function parseOrder(raw = "") {
-  let text = cleanText(raw);
+function parseOrder(text) {
+  text = cleanText(text);
 
   text = text.replace("ဈေးတွက်ပေးပါ", "").trim();
 
@@ -119,30 +109,22 @@ function parseOrder(raw = "") {
 
   if (gsmMatch) {
     gsm = gsmMatch[1];
-    text = text.replace(gsmMatch[1], "").trim();
+    text = text.replace(gsm, "").trim();
   }
 
-  const name = text.replace(/\s+/g, " ").trim();
+  let name = text
+    .replace(/\s+/g, " ")
+    .trim();
 
-  return { name, gsm, qty };
+  return {
+    name,
+    gsm,
+    qty
+  };
 }
 
 // ===============================
-// ORDER RESPONSE
-// ===============================
-function makeBill(product, qty) {
-  const unit = getUnitPrice(product, qty);
-  const total = unit * qty;
-
-  return `🧾 ORDER
-Material: ${product.name} ${product.gsm}
-Qty: ${qty}
-Unit: ${unit}
-Total: ${total} MMK`;
-}
-
-// ===============================
-// WEBHOOK
+// MAIN MESSAGE HANDLER
 // ===============================
 app.post("/", async (req, res) => {
   res.sendStatus(200);
@@ -156,10 +138,11 @@ app.post("/", async (req, res) => {
   const text = cleanText(rawText);
 
   if (!sessions[userId]) sessions[userId] = {};
+
   const session = sessions[userId];
 
   // ===============================
-  // START
+  // HI
   // ===============================
   if (text === "hi") {
     session.step = null;
@@ -171,7 +154,7 @@ app.post("/", async (req, res) => {
   }
 
   // ===============================
-  // MAIN ORDER FLOW
+  // FULL ONE LINE ORDER
   // ===============================
   if (text.includes("ဈေးတွက်ပေးပါ")) {
     const order = parseOrder(rawText);
@@ -188,31 +171,42 @@ app.post("/", async (req, res) => {
     const product = findProduct(order.name, order.gsm);
 
     if (!product) {
+      session.step = null;
       return sendMessage(userId, "❌ Material မတွေ့ပါ");
     }
 
-    if (product.needGsm) {
+    if (!order.gsm && product.gsm) {
+      session.productName = product.name;
       session.step = "wait_gsm";
-      session.productName = order.name;
 
-      const list = product.options.map(p => p.gsm).join(" / ");
+      const options = products
+        .filter(p => p.name === product.name)
+        .map(p => p.gsm)
+        .join(" / ");
 
-      return sendMessage(
-        userId,
-        `📄 GSM ဘယ်လောက်လဲ?\n${list}`
-      );
+      return sendMessage(userId, `📄 GSM ဘယ်လောက်လဲ?\n${options}`);
     }
 
     if (!order.qty) {
-      session.step = "wait_qty";
       session.product = product;
+      session.step = "wait_qty";
 
       return sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
     }
 
+    const unit = getUnitPrice(product, order.qty);
+    const total = unit * order.qty;
+
     session.step = null;
 
-    return sendMessage(userId, makeBill(product, order.qty));
+    return sendMessage(
+      userId,
+      `🧾 ORDER
+Material: ${product.name} ${product.gsm}
+Qty: ${order.qty}
+Unit: ${unit}
+Total: ${total} MMK`
+    );
   }
 
   // ===============================
@@ -223,32 +217,28 @@ app.post("/", async (req, res) => {
 
     const product = findProduct(order.name, order.gsm);
 
-    if (!product) {
-      return sendMessage(userId, "❌ Material မတွေ့ပါ");
-    }
-
-    if (product.needGsm) {
-      session.step = "wait_gsm";
-      session.productName = order.name;
-
-      const list = product.options.map(p => p.gsm).join(" / ");
-
-      return sendMessage(
-        userId,
-        `📄 GSM ဘယ်လောက်လဲ?\n${list}`
-      );
-    }
+    if (!product) return sendMessage(userId, "❌ Material မတွေ့ပါ");
 
     if (!order.qty) {
-      session.step = "wait_qty";
       session.product = product;
+      session.step = "wait_qty";
 
       return sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
     }
 
+    const unit = getUnitPrice(product, order.qty);
+    const total = unit * order.qty;
+
     session.step = null;
 
-    return sendMessage(userId, makeBill(product, order.qty));
+    return sendMessage(
+      userId,
+      `🧾 ORDER
+Material: ${product.name} ${product.gsm}
+Qty: ${order.qty}
+Unit: ${unit}
+Total: ${total} MMK`
+    );
   }
 
   // ===============================
@@ -259,9 +249,7 @@ app.post("/", async (req, res) => {
 
     const product = findProduct(session.productName, gsm);
 
-    if (!product) {
-      return sendMessage(userId, "❌ GSM မတွေ့ပါ");
-    }
+    if (!product) return sendMessage(userId, "❌ GSM မတွေ့ပါ");
 
     session.product = product;
     session.step = "wait_qty";
@@ -280,10 +268,19 @@ app.post("/", async (req, res) => {
     }
 
     const product = session.product;
+    const unit = getUnitPrice(product, qty);
+    const total = unit * qty;
 
     session.step = null;
 
-    return sendMessage(userId, makeBill(product, qty));
+    return sendMessage(
+      userId,
+      `🧾 ORDER
+Material: ${product.name} ${product.gsm}
+Qty: ${qty}
+Unit: ${unit}
+Total: ${total} MMK`
+    );
   }
 
   // ===============================
@@ -297,6 +294,6 @@ app.post("/", async (req, res) => {
 
 // ===============================
 app.listen(PORT, () => {
-  console.log("🚀 BOT V6.1 RUNNING", PORT);
+  console.log("🚀 BOT V6 RUNNING", PORT);
   console.log("TOKEN OK:", !!TOKEN);
 });
