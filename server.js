@@ -1,115 +1,302 @@
+require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
-const { priceTable } = require("./data");
+const { products } = require("./data");
 
 const app = express();
 app.use(express.json());
 
+const PORT = process.env.PORT || 3000;
 const TOKEN = process.env.VIBER_TOKEN;
 
-// STATE
-const userState = {};
+// ===============================
+// USER SESSION
+// ===============================
+const sessions = {};
 
-// NORMALIZE FUNCTION (IMPORTANT FIX)
-function normalize(text) {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace("128 g", "128g")
-    .trim();
+// ===============================
+// MYANMAR NUMBER SUPPORT
+// ===============================
+function mmToEng(text = "") {
+  const map = {
+    "၀": "0",
+    "၁": "1",
+    "၂": "2",
+    "၃": "3",
+    "၄": "4",
+    "၅": "5",
+    "၆": "6",
+    "၇": "7",
+    "၈": "8",
+    "၉": "9"
+  };
+
+  return text.replace(/[၀-၉]/g, s => map[s]);
 }
 
+// ===============================
+// CLEAN TEXT
+// ===============================
+function cleanText(text = "") {
+  return mmToEng(text).toLowerCase().trim();
+}
+
+// ===============================
 // SEND MESSAGE
-function sendMessage(receiver, text) {
-  return axios.post(
-    "https://chatapi.viber.com/pa/send_message",
-    {
-      receiver,
-      type: "text",
-      text,
-    },
-    {
-      headers: {
-        "X-Viber-Auth-Token": TOKEN,
+// ===============================
+async function sendMessage(userId, text) {
+  try {
+    await axios.post(
+      "https://chatapi.viber.com/pa/send_message",
+      {
+        receiver: userId,
+        type: "text",
+        text
       },
-    }
-  );
+      {
+        headers: {
+          "X-Viber-Auth-Token": TOKEN
+        }
+      }
+    );
+  } catch (err) {
+    console.log("SEND ERROR:", err.message);
+  }
 }
 
-// WEBHOOK
-app.post("/webhook", async (req, res) => {
-  const event = req.body;
+// ===============================
+// FIND PRODUCT
+// ===============================
+function findProduct(name, gsm = "") {
+  const matches = products.filter(
+    p => p.name.toLowerCase() === name.toLowerCase()
+  );
 
-  if (!event?.sender) return res.sendStatus(200);
+  if (matches.length === 0) return null;
 
-  const userId = event.sender.id;
-  const text = normalize(event.message?.text || "");
-
-  if (!userState[userId]) {
-    userState[userId] = { step: 0 };
+  if (gsm) {
+    return matches.find(
+      p => p.gsm.toLowerCase() === gsm.toLowerCase()
+    );
   }
 
+  if (matches.length === 1) return matches[0];
+
+  return {
+    needGsm: true,
+    options: matches
+  };
+}
+
+// ===============================
+// PRICE ENGINE
+// ===============================
+function getUnitPrice(product, qty) {
+  if (qty >= 300 && product.prices["300"]) return product.prices["300"];
+  if (qty >= 200 && product.prices["200"]) return product.prices["200"];
+  if (qty >= 100 && product.prices["100"]) return product.prices["100"];
+  return product.prices["1"];
+}
+
+// ===============================
+// PARSE ORDER
+// ===============================
+function parseOrder(raw = "") {
+  let text = cleanText(raw);
+
+  text = text.replace("ဈေးတွက်ပေးပါ", "").trim();
+
+  const qtyMatch = text.match(/(\d+)\s*(ရွက်|pcs|pc)?$/);
+  let qty = null;
+
+  if (qtyMatch) {
+    qty = parseInt(qtyMatch[1]);
+    text = text.replace(qtyMatch[0], "").trim();
+  }
+
+  const gsmMatch = text.match(/(\d+g)/);
+  let gsm = "";
+
+  if (gsmMatch) {
+    gsm = gsmMatch[1];
+    text = text.replace(gsmMatch[1], "").trim();
+  }
+
+  const name = text.replace(/\s+/g, " ").trim();
+
+  return { name, gsm, qty };
+}
+
+// ===============================
+// ORDER RESPONSE
+// ===============================
+function makeBill(product, qty) {
+  const unit = getUnitPrice(product, qty);
+  const total = unit * qty;
+
+  return `🧾 ORDER
+Material: ${product.name} ${product.gsm}
+Qty: ${qty}
+Unit: ${unit}
+Total: ${total} MMK`;
+}
+
+// ===============================
+// WEBHOOK
+// ===============================
+app.post("/", async (req, res) => {
+  res.sendStatus(200);
+
+  const body = req.body;
+
+  if (!body.sender || !body.message) return;
+
+  const userId = body.sender.id;
+  const rawText = body.message.text || "";
+  const text = cleanText(rawText);
+
+  if (!sessions[userId]) sessions[userId] = {};
+  const session = sessions[userId];
+
+  // ===============================
   // START
+  // ===============================
   if (text === "hi") {
-    userState[userId] = { step: 1 };
-    await sendMessage(
+    session.step = null;
+
+    return sendMessage(
       userId,
       "🤖 POS Bot Ready\nဈေးတွက်ရန် 'ဈေးတွက်ပေးပါ' ရိုက်ပါ"
     );
-    return res.sendStatus(200);
   }
 
-  // STEP 1
-  if (text.includes("ဈေး")) {
-    userState[userId].step = 2;
-    await sendMessage(userId, "📦 Material ရိုက်ပါ (Art Paper / Art Card)");
-    return res.sendStatus(200);
-  }
+  // ===============================
+  // MAIN ORDER FLOW
+  // ===============================
+  if (text.includes("ဈေးတွက်ပေးပါ")) {
+    const order = parseOrder(rawText);
 
-  // STEP 2
-  if (userState[userId].step === 2) {
-    userState[userId].material = text;
-    userState[userId].step = 3;
+    if (!order.name) {
+      session.step = "wait_material";
 
-    await sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
-    return res.sendStatus(200);
-  }
-
-  // STEP 3 (CALC)
-  if (userState[userId].step === 3) {
-    const qty = parseInt(text);
-
-    const material = userState[userId].material;
-
-    const priceData = priceTable[material];
-
-    if (!priceData) {
-      await sendMessage(userId, "❌ Material မတွေ့ပါ");
-      return res.sendStatus(200);
+      return sendMessage(
+        userId,
+        "📦 Material ရိုက်ပါ\nဥပမာ:\nArt Paper 128g\nArt Card 300g\nမိတ္တူ A4"
+      );
     }
 
-    const unit = priceData["1"];
-    const total = unit * qty;
+    const product = findProduct(order.name, order.gsm);
 
-    await sendMessage(
-      userId,
-      `🧾 ORDER\nMaterial: ${material}\nQty: ${qty}\nUnit: ${unit}\nTotal: ${total} MMK`
-    );
+    if (!product) {
+      return sendMessage(userId, "❌ Material မတွေ့ပါ");
+    }
 
-    userState[userId] = { step: 0 };
-    return res.sendStatus(200);
+    if (product.needGsm) {
+      session.step = "wait_gsm";
+      session.productName = order.name;
+
+      const list = product.options.map(p => p.gsm).join(" / ");
+
+      return sendMessage(
+        userId,
+        `📄 GSM ဘယ်လောက်လဲ?\n${list}`
+      );
+    }
+
+    if (!order.qty) {
+      session.step = "wait_qty";
+      session.product = product;
+
+      return sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
+    }
+
+    session.step = null;
+
+    return sendMessage(userId, makeBill(product, order.qty));
   }
 
-  res.sendStatus(200);
+  // ===============================
+  // WAIT MATERIAL
+  // ===============================
+  if (session.step === "wait_material") {
+    const order = parseOrder(rawText);
+
+    const product = findProduct(order.name, order.gsm);
+
+    if (!product) {
+      return sendMessage(userId, "❌ Material မတွေ့ပါ");
+    }
+
+    if (product.needGsm) {
+      session.step = "wait_gsm";
+      session.productName = order.name;
+
+      const list = product.options.map(p => p.gsm).join(" / ");
+
+      return sendMessage(
+        userId,
+        `📄 GSM ဘယ်လောက်လဲ?\n${list}`
+      );
+    }
+
+    if (!order.qty) {
+      session.step = "wait_qty";
+      session.product = product;
+
+      return sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
+    }
+
+    session.step = null;
+
+    return sendMessage(userId, makeBill(product, order.qty));
+  }
+
+  // ===============================
+  // WAIT GSM
+  // ===============================
+  if (session.step === "wait_gsm") {
+    const gsm = cleanText(rawText);
+
+    const product = findProduct(session.productName, gsm);
+
+    if (!product) {
+      return sendMessage(userId, "❌ GSM မတွေ့ပါ");
+    }
+
+    session.product = product;
+    session.step = "wait_qty";
+
+    return sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
+  }
+
+  // ===============================
+  // WAIT QTY
+  // ===============================
+  if (session.step === "wait_qty") {
+    const qty = parseInt(cleanText(rawText));
+
+    if (isNaN(qty)) {
+      return sendMessage(userId, "❌ Quantity မှန်အောင်ထည့်ပါ");
+    }
+
+    const product = session.product;
+
+    session.step = null;
+
+    return sendMessage(userId, makeBill(product, qty));
+  }
+
+  // ===============================
+  // DEFAULT
+  // ===============================
+  return sendMessage(
+    userId,
+    "🤖 နားမလည်ပါ\nဈေးတွက်ရန် 'ဈေးတွက်ပေးပါ' ရိုက်ပါ"
+  );
 });
 
-// ROOT
-app.get("/", (req, res) => {
-  res.send("V4 POS BOT RUNNING");
-});
-
-// START
-const PORT = process.env.PORT || 3000;
+// ===============================
 app.listen(PORT, () => {
-  console.log("BOT V4 RUNNING", PORT);
+  console.log("🚀 BOT V6.1 RUNNING", PORT);
+  console.log("TOKEN OK:", !!TOKEN);
 });

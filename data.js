@@ -1,18 +1,56 @@
-const priceTable = {
-  "art paper 128g": { "1": 1400, "2": 2100 },
-  "art paper 148g": { "1": 1600, "2": 2300 },
-
-  "art card 210g": { "1": 1900, "2": 2500 },
-  "art card 250g": { "1": 2200, "2": 2800 },
-  "art card 300g": { "1": 2700, "2": 3800 },
-  "art card 350g": { "1": 2400, "2": 3000 },
-
-  "white card 250g": { "1": 2900, "2": 4000 },
-  "mian card 300g": { "1": 3200, "2": 4300 },
-
-  "egg card 300g": { "1": 3200, "2": 4300 },
-  "cameo card 250g": { "1": 3200, "2": 4300 },
-  "kraft card 250g": { "1": 3200, "2": 4300 }
+module.exports = {
+  products: [
+    {
+      category: "paper",
+      name: "Art Paper",
+      gsm: "128g",
+      prices: {
+        "1": 1400,
+        "100": 1200,
+        "200": 1100,
+        "300": 1000
+      }
+    },
+    {
+      category: "paper",
+      name: "Art Paper",
+      gsm: "157g",
+      prices: {
+        "1": 1600,
+        "100": 1400,
+        "200": 1300,
+        "300": 1200
+      }
+    },
+    {
+      category: "paper",
+      name: "Art Card",
+      gsm: "300g",
+      prices: {
+        "1": 2700,
+        "100": 2400,
+        "200": 2300,
+        "300": 2200
+      }
+    },
+    {
+      category: "copy",
+      name: "မိတ္တူ A4",
+      gsm: "",
+      prices: {
+        "1": 100,
+        "100": 80,
+        "200": 70,
+        "300": 60
+      }
+    },
+    {
+      category: "accessory",
+      name: "PVC Card Holder",
+      gsm: "",
+      prices: {
+        "1": 500
+      }
+    }
+  ]
 };
-
-module.exports = { priceTable };

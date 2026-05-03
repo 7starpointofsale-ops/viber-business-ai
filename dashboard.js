@@ -3,7 +3,7 @@ const app = express();
 
 app.get("/", (req, res) => {
   res.send(`
-    <h1>POS Dashboard</h1>
+    <h1>📊 POS DASHBOARD V5</h1>
     <p>Bot is running...</p>
   `);
 });
