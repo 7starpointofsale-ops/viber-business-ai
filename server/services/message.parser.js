@@ -1,17 +1,59 @@
-module.exports = function (text) {
-  text = text.toLowerCase();
+const normalize = (text) => {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9]/g, "");
+};
 
-  let item = null;
-  let size = null;
-  let side = "1";
+exports.detect = (text) => {
+  if (!text) return { type: "unknown" };
 
-  if (text.includes("250")) item = "Art Card 250g";
-  if (text.includes("300")) item = "Art Card 300g";
+  const raw = text;
+  const msg = normalize(text);
 
-  if (text.includes("a4")) size = "a4";
-  if (text.includes("13x19")) size = "13x19";
+  // ==========================
+  // 👋 GREETINGS (SMART MATCH)
+  // ==========================
+  const greetings = [
+    "hi",
+    "hello",
+    "hey",
+    "helo",
+    "hii",
+    "hai",
+    "ဟိုင်း",
+    "မင်္ဂလာပါ"
+  ];
 
-  if (text.includes("2") || text.includes("double")) side = "2";
+  if (greetings.some(g => msg.includes(normalize(g)))) {
+    return { type: "greet" };
+  }
 
-  return { item, size, side };
+  // ==========================
+  // 📦 ORDER DETECTION
+  // ==========================
+  if (msg.includes("order") || msg.includes("မှာချင်") || msg.includes("မှာမယ်")) {
+    return { type: "order" };
+  }
+
+  // ==========================
+  // 💰 PRICE REQUEST DETECTION
+  // ==========================
+  const priceKeywords = [
+    "price",
+    "ဈေး",
+    "တွက်",
+    "cost",
+    "ဘယ်လောက်"
+  ];
+
+  if (priceKeywords.some(k => msg.includes(normalize(k))) || true) {
+    // fallback: everything goes to price engine (safe)
+    return {
+      type: "price",
+      query: raw
+    };
+  }
+
+  return { type: "unknown", query: raw };
 };
