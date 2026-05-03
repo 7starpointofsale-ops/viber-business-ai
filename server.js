@@ -4,122 +4,121 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
-// ================= CONFIG =================
+// ===== ENV =====
 const TOKEN = process.env.VIBER_TOKEN;
 
-// ================= STATE (simple memory) =================
-let userState = {};
+// ===== STATE =====
+const userState = {};
 
-// ================= HEALTH CHECK =================
-app.get("/", (req, res) => {
-    res.send("BOT RUNNING");
-});
+// ===== PRICE TABLE =====
+const priceTable = {
+  "art paper 128g": { "1": 1400, "2": 2100, lamination: 1000 },
+  "art paper 148g": { "1": 1600, "2": 2300, lamination: 1000 },
 
-// ================= WEBHOOK =================
-app.post("/webhook", async (req, res) => {
-    const event = req.body;
+  "art card 210g": { "1": 1900, "2": 2500, lamination: 1000 },
+  "art card 250g": { "1": 2200, "2": 2800, lamination: 1000 },
+  "art card 300g": { "1": 2700, "2": 3800, lamination: 1000 },
+  "art card 350g": { "1": 2400, "2": 3000, lamination: 1000 },
 
-    if (!event || !event.message || !event.sender) {
-        return res.sendStatus(200);
+  "white card 250g": { "1": 2900, "2": 4000, lamination: 1000 },
+  "mian card 300g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "egg card 300g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "cameo card 250g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "kraft card 250g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "crystal card 285g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "singapore card 280g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "tree emboss 250g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "sand card 250g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "england card 300g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "japan spot 250g": { "1": 3200, "2": 4300, lamination: 1000 }
+};
+
+// ===== SEND MESSAGE =====
+function sendMessage(receiver, text) {
+  return axios.post(
+    "https://chatapi.viber.com/pa/send_message",
+    {
+      receiver,
+      type: "text",
+      text,
+    },
+    {
+      headers: {
+        "X-Viber-Auth-Token": TOKEN,
+        "Content-Type": "application/json",
+      },
     }
-
-    const userId = event.sender.id;
-    const text = event.message.text?.trim();
-
-    // ❌ ignore junk input
-    if (!text || text.length < 2 || text === ".") {
-        return res.sendStatus(200);
-    }
-
-    // init state
-    if (!userState[userId]) {
-        userState[userId] = { step: 0 };
-    }
-
-    let reply = "";
-
-    // ================= FLOW =================
-
-    // STEP 0 - greeting
-    if (text.toLowerCase() === "hi") {
-        reply = "🤖 Hello 👋 ကျွန်တော်က ကိုညီရဲ့တပည့်ပါ၊ ဆရာကြီးလို့ခေါ်ပါတယ်။ ဘာများကူညီပေးရမလဲခင်ဗျာ။";
-        userState[userId].step = 0;
-    }
-
-    // STEP 1 - price request
-    else if (text.includes("ဈေး")) {
-        reply = "📦 Material ရိုက်ပါ (Art Paper / Art Card / White Card)";
-        userState[userId].step = 1;
-    }
-
-    // STEP 2 - material
-    else if (userState[userId].step === 1) {
-        userState[userId].material = text;
-        userState[userId].step = 2;
-        reply = "📏 Gram ဘယ်လောက်လဲ?";
-    }
-
-    // STEP 3 - gram
-    else if (userState[userId].step === 2) {
-        userState[userId].gram = text;
-        userState[userId].step = 3;
-        reply = "🔢 Quantity ဘယ်လောက်လဲ?";
-    }
-
-    // STEP 4 - qty + calculate
-    else if (userState[userId].step === 3) {
-        const qty = parseInt(text) || 0;
-
-        // simple demo pricing
-        let basePrice = 0;
-
-        if (userState[userId].material.toLowerCase().includes("art paper")) basePrice = 100;
-        if (userState[userId].material.toLowerCase().includes("art card")) basePrice = 150;
-        if (userState[userId].material.toLowerCase().includes("white")) basePrice = 80;
-
-        const total = qty * basePrice;
-
-        reply =
-            `🧾 Order Summary\n` +
-            `Material: ${userState[userId].material}\n` +
-            `Gram: ${userState[userId].gram}\n` +
-            `Qty: ${qty}\n` +
-            `-----------------\n` +
-            `💰 Total: ${total} MMK`;
-
-        userState[userId].step = 0;
-    }
-
-    // default fallback
-    else {
-        reply = "📌 ဈေးတွက်ချင်ရင် 'ဈေး' လို့ရေးပါ";
-    }
-
-    await sendMessage(userId, reply);
-    res.sendStatus(200);
-});
-
-// ================= SEND MESSAGE =================
-async function sendMessage(userId, text) {
-    try {
-        await axios.post("https://chatapi.viber.com/pa/send_message", {
-            receiver: userId,
-            type: "text",
-            text: text
-        }, {
-            headers: {
-                "X-Viber-Auth-Token": TOKEN
-            }
-        });
-    } catch (err) {
-        console.log("SEND ERROR:", err.message);
-    }
+  );
 }
 
-// ================= START SERVER =================
+// ===== WEBHOOK =====
+app.post("/webhook", async (req, res) => {
+  const event = req.body;
+
+  if (!event || !event.sender) return res.sendStatus(200);
+
+  const userId = String(event.sender.id);
+  const text = (event.message?.text || "").trim().toLowerCase();
+
+  if (!userState[userId]) userState[userId] = { step: 0 };
+
+  // hi
+  if (text === "hi") {
+    userState[userId].step = 1;
+    await sendMessage(userId,
+      "🤖 Hello 👋 ကျွန်တော်က ကိုညီရဲ့တပည့်ပါ၊ ဆရာကြီးလို့ခေါ်ပါတယ်။"
+    );
+    return res.sendStatus(200);
+  }
+
+  // price start
+  if (text.includes("ဈေး")) {
+    userState[userId].step = 2;
+    await sendMessage(userId, "📦 Material ရိုက်ပါ (example: Art Paper 128g)");
+    return res.sendStatus(200);
+  }
+
+  // STEP 2 material
+  if (userState[userId].step === 2) {
+    userState[userId].material = text;
+    userState[userId].step = 3;
+    await sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
+    return res.sendStatus(200);
+  }
+
+  // STEP 3 qty
+  if (userState[userId].step === 3) {
+    userState[userId].qty = text;
+
+    const material = userState[userId].material;
+    const qty = parseInt(text);
+
+    const unitPrice = priceTable[material]?.["1"] || 1000;
+
+    const total = unitPrice * qty;
+
+    await sendMessage(
+      userId,
+      `🧾 Order Summary\nMaterial: ${material}\nQty: ${qty}\nUnit: ${unitPrice}\n💰 Total: ${total} MMK`
+    );
+
+    userState[userId] = { step: 0 };
+    return res.sendStatus(200);
+  }
+
+  res.sendStatus(200);
+});
+
+// ===== ROOT =====
+app.get("/", (req, res) => {
+  res.send("BOT RUNNING");
+});
+
+// ===== START =====
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-    console.log("🚀 BOT STARTED");
-    console.log("🚀 RUNNING ON PORT", PORT);
-    console.log("TOKEN OK:", !!TOKEN);
+  console.log("🚀 BOT STARTED");
+  console.log("🚀 RUNNING ON PORT", PORT);
+  console.log("TOKEN OK:", !!TOKEN);
 });
