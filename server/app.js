@@ -6,116 +6,84 @@ const { loadDB, getPrice } = require("./services/price.engine");
 
 const app = express();
 
-// middleware
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
-// ===============================
-// LOAD DATABASE ON START
-// ===============================
 loadDB();
 
-// ===============================
-// HEALTH CHECK
-// ===============================
+// health
 app.get("/", (req, res) => {
-  res.send("🚀 Viber Business AI is running");
+  res.send("🚀 7Star AI Running");
 });
 
-// ===============================
-// VIBER WEBHOOK
-// ===============================
+// webhook
 app.post("/webhook", async (req, res) => {
   try {
     const event = req.body;
 
-    console.log("📩 Incoming:", JSON.stringify(event, null, 2));
+    if (!event || event.event !== "message") return res.sendStatus(200);
 
-    if (!event || !event.event) {
-      return res.sendStatus(200);
-    }
+    const text = event.message.text;
+    const sender = event.sender.id;
 
-    // MESSAGE EVENT
-    if (event.event === "message") {
-      const message = event.message.text;
-      const senderId = event.sender.id;
+    console.log("📩 Incoming:", text);
 
-      let reply = handleMessage(message);
+    const reply = handle(text);
 
-      await sendMessage(senderId, reply);
-    }
+    await send(sender, reply);
 
     res.sendStatus(200);
-  } catch (err) {
-    console.error("❌ WEBHOOK ERROR:", err.message);
+  } catch (e) {
+    console.log("ERROR:", e.message);
     res.sendStatus(200);
   }
 });
 
-// ===============================
-// MESSAGE HANDLER
-// ===============================
-function handleMessage(text = "") {
-  const msg = text.toLowerCase().trim();
-
-  console.log("🤖 Processing:", msg);
+// MAIN LOGIC
+function handle(text) {
+  const msg = text.toLowerCase();
 
   // greeting
-  if (msg === "hi" || msg === "hello" || msg === "မင်္ဂလာပါ") {
+  if (["hi", "hello", "မင်္ဂလာပါ"].includes(msg)) {
     return "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
   }
 
-  // math support
-  if (msg.includes("+") || msg.includes("-") || msg.includes("*") || msg.includes("/")) {
+  // math
+  if (msg.match(/[0-9]+\s*[\+\-\*\/]\s*[0-9]+/)) {
     try {
-      const result = eval(msg.replace(/[^0-9+\-*/(). ]/g, ""));
-      return `🧮 Result: ${result}`;
+      return "🧮 Result: " + eval(msg);
     } catch {
-      return "❌ Invalid math";
+      return "❌ math error";
     }
   }
 
-  // price engine
+  // PRICE
   const price = getPrice(text);
   if (price) return price;
 
   return "❌ Item မတွေ့ပါ";
 }
 
-// ===============================
-// SEND MESSAGE TO VIBER
-// ===============================
-async function sendMessage(receiver, text) {
+// send message
+async function send(receiver, text) {
   try {
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
-        receiver: receiver,
-        min_api_version: 1,
-        sender: {
-          name: "7 Star Sayar Gyi",
-          avatar: ""
-        },
+        receiver,
         type: "text",
-        text: text
+        text,
+        sender: { name: "7Star AI" }
       },
       {
         headers: {
-          "Content-Type": "application/json",
           "X-Viber-Auth-Token": process.env.VIBER_TOKEN
         }
       }
     );
-  } catch (err) {
-    console.error("❌ SEND ERROR:", err.response?.data || err.message);
+  } catch (e) {
+    console.log("SEND ERROR:", e.message);
   }
 }
 
-// ===============================
-// START SERVER
-// ===============================
 const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log("🚀 Server running", PORT));

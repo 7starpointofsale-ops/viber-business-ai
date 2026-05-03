@@ -1,15 +1,14 @@
 const fs = require("fs");
 const path = require("path");
 
-// FIXED PATH (IMPORTANT)
-const dbPath = path.join(__dirname, "../database/price.db.json");
-
 let DB = null;
 
-// LOAD DB
+// FIXED PATH (Render + Local OK)
+const dbPath = path.join(__dirname, "../database/price.db.json");
+
 function loadDB() {
   try {
-    const raw = fs.readFileSync(dbPath, "utf-8");
+    const raw = fs.readFileSync(dbPath, "utf8");
     DB = JSON.parse(raw);
     console.log("✅ PRICE DB LOADED");
   } catch (err) {
@@ -20,62 +19,40 @@ function loadDB() {
 
 // normalize text
 function norm(text = "") {
-  return text.toLowerCase().replace(/\s+/g, " ").trim();
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-// smart find item
-function findItem(msg) {
-  const input = norm(msg);
+// fuzzy search
+function getPrice(text = "") {
+  if (!DB) return null;
 
-  if (!DB || !DB.categories) return null;
+  const msg = norm(text);
 
   for (const cat of DB.categories) {
     for (const item of cat.items) {
       const itemName = norm(item.name);
 
-      if (input.includes(itemName)) {
-        return { cat, item };
+      if (msg.includes(itemName)) {
+        let reply = `📄 ${item.name}\n\n`;
+
+        for (const [size, prices] of Object.entries(item.sizes)) {
+          reply += `${size}:\n`;
+          for (const [side, price] of Object.entries(prices)) {
+            reply += `${side} Side: ${price} Ks\n`;
+          }
+          reply += `\n`;
+        }
+
+        return reply.trim();
       }
     }
   }
+
   return null;
 }
 
-// MAIN ENGINE
-function getPrice(message) {
-  const match = findItem(message);
-
-  if (!match) {
-    return "❌ မတွေ့ပါ";
-  }
-
-  const { cat, item } = match;
-
-  let sizeKey = null;
-  let side = null;
-
-  if (message.includes("a4")) sizeKey = "A4";
-  if (message.includes("13x19")) sizeKey = "13x19";
-  if (message.includes("legal")) sizeKey = "Legal";
-  if (message.includes("standard")) sizeKey = "Standard";
-
-  if (message.includes("1 side")) side = "1";
-  if (message.includes("2 side")) side = "2";
-
-  let result = `📄 ${item.name}\n\n`;
-
-  for (const s in item.sizes) {
-    result += `${s}:\n`;
-    for (const k in item.sizes[s]) {
-      result += `${k} Side: ${item.sizes[s][k]} Ks\n`;
-    }
-    result += `\n`;
-  }
-
-  return result;
-}
-
-module.exports = {
-  loadDB,
-  getPrice
-};
+module.exports = { loadDB, getPrice };
