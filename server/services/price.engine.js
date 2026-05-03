@@ -1,112 +1,62 @@
 const fs = require("fs");
 const path = require("path");
 
-// ----------------------
-// DB PATH FIX (Render safe)
-// ----------------------
-const dbPath =
-  process.env.PRICE_DB_PATH ||
-  path.join(__dirname, "../database/price.db.json");
+// ✅ FIXED PATH (IMPORTANT)
+const dbPath = path.join(__dirname, "../../database/price.db.json");
 
-// ----------------------
-// LOAD DB SAFE
-// ----------------------
-let db = { categories: [] };
+// load db safely
+function loadDB() {
+  try {
+    if (!fs.existsSync(dbPath)) {
+      console.error("❌ PRICE DB FILE NOT FOUND:", dbPath);
+      return { categories: [] };
+    }
 
-try {
-  const raw = fs.readFileSync(dbPath, "utf-8");
-  db = JSON.parse(raw);
-} catch (err) {
-  console.error("❌ PRICE DB LOAD ERROR:", err.message);
+    const raw = fs.readFileSync(dbPath, "utf-8");
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("❌ PRICE DB LOAD ERROR:", err);
+    return { categories: [] };
+  }
 }
 
-// ----------------------
-// NORMALIZE TEXT
-// ----------------------
-function normalize(text = "") {
+// normalize text
+function norm(text) {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\u1000-\u109f\s]/gi, " ")
     .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9\u1000-\u109f+]/gi, "")
     .trim();
 }
 
-// ----------------------
-// VALID INPUT CHECK
-// ----------------------
-function isValid(text) {
-  if (!text) return false;
+// main engine
+module.exports = function (msg) {
+  const db = loadDB();
 
-  // reject junk like 12345 / 5+10 / abc only
-  if (/^\d+$/.test(text)) return false;
-  if (/^\d+(\+\d+)+$/.test(text)) return false;
-  if (text.length < 2) return false;
-
-  return true;
-}
-
-// ----------------------
-// MATCH FUNCTION
-// ----------------------
-function findMatch(query) {
-  const q = normalize(query);
-
-  let best = null;
-  let bestScore = 0;
+  const input = norm(msg);
 
   for (const cat of db.categories || []) {
     for (const item of cat.items || []) {
-      const itemName = normalize(item.name);
+      const itemName = norm(item.name);
 
-      let score = 0;
+      if (input.includes(itemName)) {
+        let result = `📄 ${item.name}\n\n`;
 
-      const qWords = q.split(" ");
-      const iWords = itemName.split(" ");
+        for (const size in item.sizes) {
+          const price = item.sizes[size];
 
-      qWords.forEach(w => {
-        if (iWords.includes(w)) score++;
-      });
+          result += `${size}:\n`;
 
-      if (score > bestScore) {
-        bestScore = score;
-        best = { cat, item };
+          if (price["1"]) result += `1 Side: ${price["1"]} Ks\n`;
+          if (price["2"]) result += `2 Side: ${price["2"]} Ks\n`;
+
+          result += `\n`;
+        }
+
+        return result;
       }
     }
   }
 
-  // 🔥 STRICT RULE (avoid wrong fallback like A4)
-  if (!best || bestScore < 2) return null;
-
-  return best;
-}
-
-// ----------------------
-// MAIN EXPORT
-// ----------------------
-module.exports = function priceEngine(message = "") {
-  const input = message.trim();
-
-  // ❌ invalid input
-  if (!isValid(input)) {
-    return "❌ မတွေ့ပါ";
-  }
-
-  const match = findMatch(input);
-
-  // ❌ no match
-  if (!match) {
-    return "❌ မတွေ့ပါ";
-  }
-
-  const { item } = match;
-
-  let output = `📄 ${item.name}\n\n`;
-
-  if (item.sizes) {
-    for (const [size, price] of Object.entries(item.sizes)) {
-      output += `${size}:\n1 Side: ${price["1"] || "-"} Ks\n2 Side: ${price["2"] || "-"} Ks\n\n`;
-    }
-  }
-
-  return output.trim();
+  return "❌ မတွေ့ပါ";
 };
