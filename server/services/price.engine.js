@@ -1,71 +1,120 @@
 const fs = require("fs");
 const path = require("path");
 
-// ✅ FIXED PATH (ONLY ONE)
-const dbPath = path.join(__dirname, "../../database/price.db.json");
+// ✅ FIXED DB PATH
+const DB_PATH = path.join(__dirname, "../../database/price.db.json");
 
-function loadDB() {
-  try {
-    if (!fs.existsSync(dbPath)) {
-      console.error("❌ PRICE DB FILE NOT FOUND:", dbPath);
-      return { categories: [] };
-    }
+let db = { categories: [] };
 
-    return JSON.parse(fs.readFileSync(dbPath, "utf-8"));
-  } catch (err) {
-    console.error("❌ DB ERROR:", err);
-    return { categories: [] };
-  }
+try {
+  const raw = fs.readFileSync(DB_PATH, "utf-8");
+  db = JSON.parse(raw);
+  console.log("✅ PRICE DB LOADED");
+} catch (err) {
+  console.log("❌ PRICE DB LOAD ERROR:", err.message);
 }
 
-// normalize text
-function norm(t) {
-  return t.toLowerCase().replace(/\s+/g, " ").trim();
+/* -------------------------------
+   🧠 TEXT NORMALIZE (IMPORTANT)
+--------------------------------*/
+function normalize(text = "") {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\u1000-\u109f\s]/g, " ") // keep burmese + numbers
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-// math engine
-function isMath(text) {
-  return /^[0-9+\-*/().\s]+$/.test(text);
+/* -------------------------------
+   🔍 EXTRACT INFO
+--------------------------------*/
+function extractNumber(text) {
+  const match = text.match(/\d+/);
+  return match ? match[0] : null;
 }
 
-function calc(text) {
-  try {
-    return eval(text);
-  } catch {
-    return null;
-  }
+function detectSide(text) {
+  if (text.includes("2")) return 2;
+  if (text.includes("one") || text.includes("1")) return 1;
+  return null;
 }
 
-module.exports = function (msg) {
-  const input = norm(msg);
+/* -------------------------------
+   🧠 SMART MATCH ENGINE
+--------------------------------*/
+function findBestMatch(text) {
+  const msg = normalize(text);
+  const num = extractNumber(msg);
 
-  // 🧮 math first
-  if (isMath(input)) {
-    const result = calc(input);
-    if (result !== null) return `🧮 Result: ${result}`;
-  }
+  let best = null;
+  let bestScore = 0;
 
-  const db = loadDB();
+  for (const cat of db.categories) {
+    for (const item of cat.items) {
+      const itemName = normalize(item.name);
 
-  for (const cat of db.categories || []) {
-    for (const item of cat.items || []) {
-      const itemName = norm(item.name);
+      let score = 0;
 
-      if (input.includes(itemName)) {
-        let out = `📄 ${item.name}\n\n`;
+      // 🔥 name match
+      if (msg.includes(itemName)) score += 5;
 
-        for (const size in item.sizes) {
-          const p = item.sizes[size];
-          out += `${size}:\n`;
-          if (p["1"]) out += `1 Side: ${p["1"]} Ks\n`;
-          if (p["2"]) out += `2 Side: ${p["2"]} Ks\n`;
-          out += `\n`;
-        }
+      // 🔥 partial keyword match
+      const words = itemName.split(" ");
+      for (let w of words) {
+        if (w && msg.includes(w)) score += 1;
+      }
 
-        return out;
+      // 🔥 number match (250g etc)
+      if (num && itemName.includes(num)) score += 3;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = item;
       }
     }
   }
 
-  return "❌ မတွေ့ပါ";
+  return bestScore >= 3 ? best : null;
+}
+
+/* -------------------------------
+   💬 RESPONSE FORMATTER
+--------------------------------*/
+function formatReply(item) {
+  if (!item) return "❌ မတွေ့ပါ";
+
+  let reply = `📄 ${item.name}\n\n`;
+
+  for (const size in item.sizes) {
+    reply += `${size}:\n`;
+    reply += `1 Side: ${item.sizes[size]["1"]} Ks\n`;
+
+    if (item.sizes[size]["2"]) {
+      reply += `2 Side: ${item.sizes[size]["2"]} Ks\n`;
+    }
+
+    reply += `\n`;
+  }
+
+  return reply;
+}
+
+/* -------------------------------
+   🚀 MAIN EXPORT
+--------------------------------*/
+module.exports = function (msg) {
+  const text = msg.trim();
+
+  // 🧮 simple math support
+  if (/^\d+\s*[\+\-\*\/]\s*\d+$/.test(text)) {
+    try {
+      return "🧮 Result: " + eval(text);
+    } catch {
+      return "❌ မတွက်နိုင်ပါ";
+    }
+  }
+
+  const result = findBestMatch(text);
+
+  return formatReply(result);
 };
