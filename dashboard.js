@@ -1,35 +1,13 @@
 const express = require("express");
-const { orders } = require("./data");
-
 const app = express();
 
-app.get("/", (req,res)=>{
-  let html = `
-  <h2>📊 POS DASHBOARD</h2>
-  <table border="1" cellpadding="10">
-    <tr>
-      <th>Material</th>
-      <th>Qty</th>
-      <th>Unit</th>
-      <th>Total</th>
-    </tr>
-  `;
-
-  orders.forEach(o=>{
-    html += `
-      <tr>
-        <td>${o.mat}</td>
-        <td>${o.qty}</td>
-        <td>${o.unit}</td>
-        <td>${o.total}</td>
-      </tr>
-    `;
-  });
-
-  html += `</table>`;
-  res.send(html);
+app.get("/", (req, res) => {
+  res.send(`
+    <h1>POS Dashboard</h1>
+    <p>Bot is running...</p>
+  `);
 });
 
-app.listen(4000, ()=>{
-  console.log("DASHBOARD RUNNING 4000");
+app.listen(4000, () => {
+  console.log("DASHBOARD RUNNING ON 4000");
 });
