@@ -1,217 +1,108 @@
 require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
-const { products } = require("./data");
+const { prices } = require("./data");
 
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
 const TOKEN = process.env.VIBER_TOKEN;
 
-// ===============================
-// MEMORY SESSION
-// ===============================
+// ===== SESSION MEMORY =====
 const sessions = {};
 
-// ===============================
-// MYANMAR NUMBER CONVERT
-// ===============================
-function mmToEn(text = "") {
-  const map = {
-    "၀": "0",
-    "၁": "1",
-    "၂": "2",
-    "၃": "3",
-    "၄": "4",
-    "၅": "5",
-    "၆": "6",
-    "၇": "7",
-    "၈": "8",
-    "၉": "9"
-  };
-
-  return text.replace(/[၀-၉]/g, m => map[m]);
+// ===== NORMALIZE =====
+function normalize(text) {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-// ===============================
-// CLEAN TEXT
-// ===============================
-function cleanText(text = "") {
-  return mmToEn(text).toLowerCase().trim();
+// ===== GET PRICE =====
+function getPrice(material) {
+  return prices[normalize(material)] || null;
 }
 
-// ===============================
-// FIND PRODUCT
-// ===============================
-function findProduct(input) {
-  input = cleanText(input);
-
-  for (const item of products) {
-    const full = `${item.name} ${item.gsm}`.toLowerCase().trim();
-    const short = item.name.toLowerCase().trim();
-
-    if (input.includes(full)) return item;
-    if (input === short) return item;
-  }
-
-  return null;
-}
-
-// ===============================
-// GET PRICE BY QTY
-// ===============================
-function getTierPrice(product, qty) {
-  if (qty >= 300 && product.prices["300"]) return product.prices["300"];
-  if (qty >= 200 && product.prices["200"]) return product.prices["200"];
-  if (qty >= 100 && product.prices["100"]) return product.prices["100"];
-  return product.prices["1"];
-}
-
-// ===============================
-// EXTRACT QTY
-// ===============================
-function extractQty(text) {
-  text = cleanText(text);
-
-  const match = text.match(/(\d+)/);
-  if (!match) return null;
-
-  return parseInt(match[1]);
-}
-
-// ===============================
-// SEND VIBER
-// ===============================
-async function sendMessage(receiver, text) {
+// ===== SEND MESSAGE =====
+async function sendMessage(user_id, text) {
   try {
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
-        receiver,
+        receiver: user_id,
         type: "text",
         text
       },
       {
         headers: {
-          "X-Viber-Auth-Token": TOKEN
+          "X-Viber-Auth-Token": TOKEN,
+          "Content-Type": "application/json"
         }
       }
     );
   } catch (err) {
-    console.log("SEND ERROR");
+    console.log("SEND ERROR:", err.message);
   }
 }
 
-// ===============================
-// MAIN WEBHOOK
-// ===============================
+// ===== WEBHOOK =====
 app.post("/", async (req, res) => {
-  res.sendStatus(200);
+  const event = req.body;
 
-  const body = req.body;
-  if (!body.sender || !body.message) return;
+  if (!event || !event.sender) return res.sendStatus(200);
 
-  const userId = body.sender.id;
-  let text = body.message.text || "";
-  const original = text;
+  const user_id = event.sender.id;
+  const text = event.message.text;
 
-  text = cleanText(text);
+  if (!sessions[user_id]) sessions[user_id] = {};
 
-  if (!sessions[userId]) sessions[userId] = {};
-  const session = sessions[userId];
+  const session = sessions[user_id];
 
-  // ===============================
-  // HI
-  // ===============================
+  // ===== START =====
   if (text === "hi") {
-    session.step = null;
-
-    return sendMessage(
-      userId,
-      "🤖 POS Bot Ready\nဈေးတွက်ရန် 'ဈေးတွက်ပေးပါ' ရိုက်ပါ"
-    );
-  }
-
-  // ===============================
-  // DIRECT ORDER
-  // ===============================
-  if (text.includes("ဈေးတွက်ပေးပါ")) {
-    const qty = extractQty(text);
-    const product = findProduct(text);
-
-    if (product && qty) {
-      const unit = getTierPrice(product, qty);
-      const total = unit * qty;
-
-      return sendMessage(
-        userId,
-        `🧾 ORDER
-Material: ${product.name} ${product.gsm}
-Qty: ${qty}
-Unit: ${unit}
-Total: ${total} MMK`
-      );
-    }
-
     session.step = "material";
-
-    return sendMessage(
-      userId,
-      "📦 Material ရိုက်ပါ (Art Paper / Art Card / မိတ္တူ / Accessories)"
-    );
+    return sendMessage(user_id, "🤖 POS Bot Ready\n📦 Material ရိုက်ပါ");
   }
 
-  // ===============================
-  // MATERIAL STEP
-  // ===============================
+  // ===== STEP 1 MATERIAL =====
   if (session.step === "material") {
-    const product = findProduct(text);
+    session.material = text;
 
-    if (!product) {
-      return sendMessage(userId, "❌ Material မတွေ့ပါ");
+    const price = getPrice(text);
+    if (!price) {
+      return sendMessage(user_id, "❌ Material မတွေ့ပါ");
     }
 
-    session.product = product;
+    session.price = price;
     session.step = "qty";
 
-    // if no gsm supplied and multiple options
-    if (!product.gsm && product.name.toLowerCase() === "art paper") {
-      return sendMessage(userId, "📄 GSM ဘယ်လောက်လဲ?");
-    }
-
-    return sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
+    return sendMessage(user_id, "🔢 Quantity?");
   }
 
-  // ===============================
-  // QTY STEP
-  // ===============================
+  // ===== STEP 2 QTY =====
   if (session.step === "qty") {
-    const qty = extractQty(original);
+    const qty = parseInt(text);
 
-    if (!qty) {
-      return sendMessage(userId, "❌ Quantity မှန်အောင်ရိုက်ပါ");
+    if (isNaN(qty)) {
+      return sendMessage(user_id, "❌ Quantity မှန်အောင်ထည့်ပါ");
     }
 
-    const product = session.product;
-    const unit = getTierPrice(product, qty);
-    const total = unit * qty;
+    session.qty = qty;
+    session.total = qty * session.price;
 
     session.step = null;
 
     return sendMessage(
-      userId,
-      `🧾 ORDER
-Material: ${product.name} ${product.gsm}
-Qty: ${qty}
-Unit: ${unit}
-Total: ${total} MMK`
+      user_id,
+      `🧾 ORDER\nMaterial: ${session.material}\nQty: ${qty}\nUnit: ${session.price}\nTotal: ${session.total} MMK`
     );
   }
+
+  res.sendStatus(200);
 });
 
-// ===============================
+// ===== START =====
+const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log("🚀 BOT V6 RUNNING", PORT);
+  console.log("🚀 BOT V5 RUNNING", PORT);
   console.log("TOKEN OK:", !!TOKEN);
 });
