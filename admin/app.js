@@ -1,33 +1,40 @@
 async function loadData() {
-  const res = await fetch("/api/prices");
-  const data = await res.json();
+  try {
+    const res = await fetch("/api/prices");
+    const data = await res.json();
 
-  const tbody = document.getElementById("tableBody");
-  tbody.innerHTML = "";
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
 
-  data.categories.forEach(cat => {
-    cat.items.forEach(item => {
-      Object.keys(item.sizes).forEach(size => {
+    if (!data || !data.categories) return;
 
-        const row = document.createElement("tr");
+    data.categories.forEach(cat => {
+      cat.items.forEach(item => {
+        Object.keys(item.sizes).forEach(size => {
 
-        row.innerHTML = `
-          <td>${cat.name}</td>
-          <td>${item.name}</td>
-          <td>${size}</td>
-          <td>${item.sizes[size]["1"]}</td>
-          <td>${item.sizes[size]["2"]}</td>
-          <td>
-            <button class="delete" onclick="deleteItem('${cat.name}','${item.name}','${size}')">
-              Delete
-            </button>
-          </td>
-        `;
+          const row = document.createElement("tr");
 
-        tbody.appendChild(row);
+          row.innerHTML = `
+            <td>${cat.name}</td>
+            <td>${item.name}</td>
+            <td>${size}</td>
+            <td>${item.sizes[size]["1"] || 0}</td>
+            <td>${item.sizes[size]["2"] || 0}</td>
+            <td>
+              <button class="delete" onclick="deleteItem('${cat.name}','${item.name}','${size}')">
+                Delete
+              </button>
+            </td>
+          `;
+
+          tbody.appendChild(row);
+        });
       });
     });
-  });
+
+  } catch (err) {
+    console.error("LOAD ERROR:", err);
+  }
 }
 
 async function addItem() {

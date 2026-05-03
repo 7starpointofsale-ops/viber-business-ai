@@ -1,69 +1,70 @@
-const parser = require("../services/message.parser");
 const priceEngine = require("../services/price.engine");
-const replyBuilder = require("../services/reply.builder");
-const viberService = require("../services/viber.service");
 
-let cache = new Map();
-
+// =======================
+// 🤖 MAIN BOT HANDLER
+// =======================
 exports.handleMessage = async (req, res) => {
   try {
-    const message = req.body.message;
-    const sender = req.body.sender;
+    const message = req.body?.message?.text || req.body?.text || "";
 
-    if (!message || !sender) return res.sendStatus(200);
+    console.log("📩 Incoming:", message);
 
-    const userId = sender.id;
-    const text = message.text || "";
-
-    // ==========================
-    // 🔥 ANTI DUPLICATE SYSTEM
-    // ==========================
-    const key = userId + text;
-    if (cache.has(key)) return res.sendStatus(200);
-
-    cache.set(key, true);
-    setTimeout(() => cache.delete(key), 4000);
-
-    // ==========================
-    // 🧠 PARSE MESSAGE
-    // ==========================
-    const parsed = parser.detect(text);
-
-    let response;
-
-    switch (parsed.type) {
-
-      case "greet":
-        response = replyBuilder.greet();
-        break;
-
-      case "order":
-        response = replyBuilder.orderGuide();
-        break;
-
-      case "price":
-        const result = priceEngine.find(parsed.query);
-
-        if (!result) {
-          response = replyBuilder.notFound();
-        } else {
-          response = replyBuilder.price(result);
-        }
-        break;
-
-      default:
-        response = replyBuilder.defaultReply();
+    if (!message) {
+      return res.json({
+        reply: "❌ Empty message"
+      });
     }
 
-    // ==========================
-    // 📤 SEND RESPONSE
-    // ==========================
-    await viberService.send(userId, response);
+    // =======================
+    // 🔥 PRICE ENGINE CHECK
+    // =======================
+    const priceReply = priceEngine(message);
 
-    res.sendStatus(200);
+    if (priceReply) {
+      return res.json({
+        reply: priceReply
+      });
+    }
 
+    // =======================
+    // 💬 DEFAULT RESPONSES
+    // =======================
+    const text = message.toLowerCase();
+
+    if (text.includes("hi") || text.includes("hello")) {
+      return res.json({
+        reply: "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်"
+      });
+    }
+
+    if (text.includes("order")) {
+      return res.json({
+        reply:
+          "📦 Order လုပ်ရန်:\n" +
+          "1️⃣ Item name\n" +
+          "2️⃣ Size\n" +
+          "3️⃣ Quantity\n" +
+          "4️⃣ Phone number ပို့ပေးပါ"
+      });
+    }
+
+    if (text.includes("price") || text.includes("ဈေး")) {
+      return res.json({
+        reply: "📌 Item name သို့မဟုတ် product name ရိုက်ပေးပါ"
+      });
+    }
+
+    // =======================
+    // ❌ FALLBACK
+    // =======================
+    return res.json({
+      reply: "❌ မတွေ့ပါ\n📌 ထပ်မေးပေးပါ"
+    });
   } catch (err) {
-    console.error("BOT ERROR:", err);
-    res.sendStatus(200);
+    console.log("❌ BOT ERROR:", err.message);
+
+    return res.json({
+      reply: "⚠️ System Error"
+    });
   }
 };
