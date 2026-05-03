@@ -1,9 +1,8 @@
 const express = require("express");
 const router = express.Router();
 
-router.post("/", (req, res) => {
-  console.log("Webhook hit:", req.body);
-  res.sendStatus(200);
-});
+const { handleMessage } = require("../controllers/bot.controller");
+
+router.post("/", handleMessage);
 
 module.exports = router;

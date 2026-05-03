@@ -1,26 +1,14 @@
-const fs = require("fs");
-const path = require("path");
+const db = require("../../database/price.db.json");
 
-const dbPath = path.join(__dirname, "../../database/price.db.json");
-
-function getDB() {
-  return JSON.parse(fs.readFileSync(dbPath, "utf8"));
-}
-
-function findPrice(text) {
-  const db = getDB();
-
-  if (text.includes("250")) {
-    const p = db.art_card_250;
-    return `${p.name}\n1 Side: ${p["1side"]} Ks\n2 Side: ${p["2side"]} Ks`;
+module.exports = function ({ item, size, side }) {
+  for (let cat of db.categories) {
+    for (let i of cat.items) {
+      if (i.name === item) {
+        if (i.sizes[size]) {
+          return i.sizes[size][side];
+        }
+      }
+    }
   }
-
-  if (text.includes("300")) {
-    const p = db.art_card_300;
-    return `${p.name}\n1 Side: ${p["1side"]} Ks\n2 Side: ${p["2side"]} Ks`;
-  }
-
   return null;
-}
-
-module.exports = { findPrice };
+};

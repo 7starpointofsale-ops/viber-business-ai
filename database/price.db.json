@@ -1,12 +1,23 @@
 {
-  "art_card_250": {
-    "name": "Art Card 250g",
-    "1side": 1900,
-    "2side": 2500
-  },
-  "art_card_300": {
-    "name": "Art Card 300g",
-    "1side": 2200,
-    "2side": 2800
-  }
+  "categories": [
+    {
+      "name": "Digital Press",
+      "items": [
+        {
+          "name": "Art Card 250g",
+          "sizes": {
+            "a4": { "1": 2200, "2": 2800 },
+            "13x19": { "1": 5300, "2": 6500 }
+          }
+        },
+        {
+          "name": "Art Card 300g",
+          "sizes": {
+            "a4": { "1": 2700, "2": 3800 },
+            "13x19": { "1": 5800, "2": 7500 }
+          }
+        }
+      ]
+    }
+  ]
 }
