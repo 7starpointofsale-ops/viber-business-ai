@@ -1,68 +1,68 @@
 const express = require("express");
 const bodyParser = require("body-parser");
+
 const { loadDB, calculate } = require("./services/price.engine");
+const { createOrder, generateInvoice } = require("./services/order.engine");
 
 const app = express();
-
 app.use(bodyParser.json());
 
-// ---------- LOAD DB ON START ----------
+// ---------- LOAD DB ----------
 loadDB();
 
-// ---------- HEALTH CHECK ----------
+// ---------- HOME ----------
 app.get("/", (req, res) => {
-  res.send("🚀 Bot is running");
+  res.send("🚀 7Star Bot Running");
 });
 
-// ---------- VIBER WEBHOOK ----------
+// ---------- WEBHOOK ----------
 app.post("/webhook", (req, res) => {
-  try {
-    const message = req.body?.message?.text || req.body?.text;
+  const message = req.body?.message?.text || "";
 
-    if (!message) {
-      return res.sendStatus(200);
-    }
+  console.log("📩 Incoming:", message);
 
-    console.log("📩 Incoming:", message);
+  let reply = "";
+  const text = message.toLowerCase();
 
-    let reply = "";
-
-    // ---------- GREETING ----------
-    const text = message.toLowerCase();
-
-    if (["hi", "hello", "မင်္ဂလာပါ"].includes(text)) {
-      reply = "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
-    }
-
-    // ---------- MATH ----------
-    else if (/^[0-9+\-*/().\s]+$/.test(message)) {
-      try {
-        const result = eval(message);
-        reply = `🧮 Result: ${result}`;
-      } catch {
-        reply = "❌ မတွက်နိုင်ပါ";
-      }
-    }
-
-    // ---------- PRICE ENGINE ----------
-    else {
-      reply = calculate(message);
-    }
-
-    console.log("🤖 Reply:", reply);
-
-    // 👉 Viber send (placeholder)
-    res.json({
-      reply: reply
-    });
-
-  } catch (err) {
-    console.error("ERROR:", err.message);
-    res.sendStatus(500);
+  // ---------- GREETING ----------
+  if (["hi", "hello", "မင်္ဂလာပါ"].includes(text)) {
+    reply = "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
   }
+
+  // ---------- MATH ----------
+  else if (/^[0-9+\-*/().\s]+$/.test(message)) {
+    try {
+      reply = `🧮 Result: ${eval(message)}`;
+    } catch {
+      reply = "❌ မတွက်နိုင်ပါ";
+    }
+  }
+
+  // ---------- ORDER COMMAND ----------
+  else if (text.startsWith("order")) {
+    const input = message.replace("order", "").trim();
+    const result = createOrder(input);
+
+    reply = result.message;
+  }
+
+  // ---------- INVOICE ----------
+  else if (text.startsWith("invoice")) {
+    const id = message.replace("invoice", "").trim();
+    reply = generateInvoice(id);
+  }
+
+  // ---------- PRICE ENGINE ----------
+  else {
+    reply = calculate(message);
+  }
+
+  console.log("🤖 Reply:", reply);
+
+  res.json({ reply });
 });
 
-// ---------- START SERVER ----------
+// ---------- START ----------
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
