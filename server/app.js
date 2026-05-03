@@ -1,89 +1,45 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
-const { loadDB, getPrice } = require("./services/price.engine");
+// ❌ wrong (server/database ကိုရှာနေတယ်)
+// const dbPath = path.join(__dirname, "../database/price.db.json");
 
-const app = express();
+// ✅ FIXED (root database folder)
+const dbPath = path.join(__dirname, "../../database/price.db.json");
 
-app.use(bodyParser.json());
+let DB = null;
 
-loadDB();
-
-// health
-app.get("/", (req, res) => {
-  res.send("🚀 7Star AI Running");
-});
-
-// webhook
-app.post("/webhook", async (req, res) => {
+function loadDB() {
   try {
-    const event = req.body;
-
-    if (!event || event.event !== "message") return res.sendStatus(200);
-
-    const text = event.message.text;
-    const sender = event.sender.id;
-
-    console.log("📩 Incoming:", text);
-
-    const reply = handle(text);
-
-    await send(sender, reply);
-
-    res.sendStatus(200);
-  } catch (e) {
-    console.log("ERROR:", e.message);
-    res.sendStatus(200);
+    const raw = fs.readFileSync(dbPath, "utf-8");
+    DB = JSON.parse(raw);
+    console.log("✅ PRICE DB LOADED");
+  } catch (err) {
+    console.error("❌ DB ERROR:", err.message);
   }
-});
+}
 
-// MAIN LOGIC
-function handle(text) {
+function getPrice(text = "") {
+  if (!DB) return null;
+
   const msg = text.toLowerCase();
 
-  // greeting
-  if (["hi", "hello", "မင်္ဂလာပါ"].includes(msg)) {
-    return "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
-  }
+  for (const cat of DB.categories) {
+    for (const item of cat.items) {
+      if (msg.includes(item.name.toLowerCase())) {
+        const sizeKey = Object.keys(item.sizes)[0];
+        const side = msg.includes("2 side") ? "2" : "1";
 
-  // math
-  if (msg.match(/[0-9]+\s*[\+\-\*\/]\s*[0-9]+/)) {
-    try {
-      return "🧮 Result: " + eval(msg);
-    } catch {
-      return "❌ math error";
+        const price = item.sizes[sizeKey]?.[side];
+
+        if (price) {
+          return `📄 ${item.name}\n\n${sizeKey}:\n${side} Side: ${price} Ks`;
+        }
+      }
     }
   }
 
-  // PRICE
-  const price = getPrice(text);
-  if (price) return price;
-
-  return "❌ Item မတွေ့ပါ";
+  return null;
 }
 
-// send message
-async function send(receiver, text) {
-  try {
-    await axios.post(
-      "https://chatapi.viber.com/pa/send_message",
-      {
-        receiver,
-        type: "text",
-        text,
-        sender: { name: "7Star AI" }
-      },
-      {
-        headers: {
-          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
-        }
-      }
-    );
-  } catch (e) {
-    console.log("SEND ERROR:", e.message);
-  }
-}
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("🚀 Server running", PORT));
+module.exports = { loadDB, getPrice };
