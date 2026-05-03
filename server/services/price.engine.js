@@ -1,65 +1,58 @@
 const fs = require("fs");
 const path = require("path");
 
-const dbPath = path.join(__dirname, "../../database/price.db.json");
-
 let DB = null;
 
-// =====================
-// LOAD DB SAFE
-// =====================
+// FIXED PATH (Render + Local both work)
+const DB_PATH = path.join(__dirname, "../database/price.db.json");
+
 function loadDB() {
   try {
-    if (!fs.existsSync(dbPath)) {
-      console.error("❌ DB NOT FOUND:", dbPath);
+    if (!fs.existsSync(DB_PATH)) {
+      console.error("❌ PRICE DB NOT FOUND:", DB_PATH);
       DB = { categories: [] };
       return;
     }
 
-    DB = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
-    console.log("✅ DB LOADED");
-  } catch (e) {
-    console.error("❌ DB ERROR:", e.message);
+    DB = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+    console.log("✅ Price DB Loaded");
+  } catch (err) {
+    console.error("❌ DB LOAD ERROR:", err.message);
     DB = { categories: [] };
   }
 }
 
-// =====================
-// SMART NORMALIZER
-// =====================
-function normalize(text = "") {
-  return text
-    .toLowerCase()
-    .replace(/g/g, "") // 250g -> 250
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-// =====================
-// PRICE FINDER (SMART)
-// =====================
 function getPrice(text = "") {
-  if (!DB) return null;
+  if (!DB || !DB.categories) return null;
 
-  const msg = normalize(text);
+  const msg = text.toLowerCase();
 
   for (const cat of DB.categories) {
     for (const item of cat.items) {
-      const itemName = normalize(item.name);
+      const itemName = item.name.toLowerCase();
 
-      // fuzzy match (important fix)
-      if (
-        msg.includes(itemName.split(" ")[0]) ||
-        itemName.split(" ")[0].includes(msg.split(" ")[0])
-      ) {
-        const sizeKey = Object.keys(item.sizes)[0];
-        const side = msg.includes("2") ? "2" : "1";
+      if (msg.includes(itemName.toLowerCase())) {
+        let sizeKey = null;
 
-        const price = item.sizes[sizeKey]?.[side];
+        if (msg.includes("a4")) sizeKey = "A4";
+        if (msg.includes("13x19")) sizeKey = "13x19";
+        if (msg.includes("legal")) sizeKey = "Legal";
 
-        if (price) {
-          return `📄 ${item.name}\n\n${sizeKey}:\n${side} Side: ${price} Ks`;
+        if (!sizeKey) {
+          return `📄 ${item.name}\nSize လိုအပ်ပါတယ် (A4 / 13x19 / Legal)`;
         }
+
+        const sizeData = item.sizes[sizeKey];
+        if (!sizeData) return "❌ Size မတွေ့ပါ";
+
+        let side = "1";
+        if (msg.includes("2 side")) side = "2";
+
+        const price = sizeData[side];
+
+        if (!price) return "❌ Price မရှိပါ";
+
+        return `📄 ${item.name}\n${sizeKey}:\n${side} Side: ${price} Ks`;
       }
     }
   }
