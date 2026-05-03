@@ -1,80 +1,69 @@
 const fs = require("fs");
 const path = require("path");
 
-// =======================
-// 📦 SAFE DB LOADER
-// =======================
+// 🔥 Render + local safe path
+const dbPath = path.join(process.cwd(), "price.db.json");
+
+let db = {
+  categories: []
+};
+
+// ✅ Load DB safely
 function loadDB() {
   try {
-    // Render + local safe path fix
-    const filePath = path.join(__dirname, "../../price.db.json");
-
-    if (!fs.existsSync(filePath)) {
-      console.log("❌ PRICE DB FILE NOT FOUND:", filePath);
-      return { categories: [] };
+    if (!fs.existsSync(dbPath)) {
+      console.log("❌ PRICE DB FILE NOT FOUND:", dbPath);
+      return db;
     }
 
-    const raw = fs.readFileSync(filePath, "utf-8");
-    const json = JSON.parse(raw);
+    const raw = fs.readFileSync(dbPath, "utf-8");
+    const parsed = JSON.parse(raw);
 
-    if (!json || !Array.isArray(json.categories)) {
-      console.log("❌ INVALID DB STRUCTURE");
-      return { categories: [] };
+    if (!parsed || !Array.isArray(parsed.categories)) {
+      console.log("❌ INVALID PRICE DB FORMAT");
+      return db;
     }
 
-    return json;
+    db = parsed;
+    return db;
+
   } catch (err) {
-    console.log("❌ PRICE DB ERROR:", err.message);
-    return { categories: [] };
+    console.log("❌ PRICE DB ERROR:", err);
+    return db;
   }
 }
 
-// =======================
-// 🔍 PRICE SEARCH ENGINE
-// =======================
-function findPrice(message = "") {
-  const db = loadDB();
+// load at startup
+loadDB();
 
-  const text = message.toLowerCase();
+// 🔥 Price search engine
+module.exports = function (text) {
+  const data = loadDB();
 
-  const categories = Array.isArray(db.categories) ? db.categories : [];
+  if (!data.categories || !Array.isArray(data.categories)) {
+    return "❌ Price data မတွေ့ပါ";
+  }
 
-  for (const cat of categories) {
-    for (const item of cat.items || []) {
-      const itemName = (item.name || "").toLowerCase();
+  text = text.toLowerCase();
 
-      if (text.includes(itemName)) {
-        for (const sizeKey in item.sizes || {}) {
-          const sizeData = item.sizes[sizeKey];
+  for (const cat of data.categories) {
+    for (const item of cat.items) {
+      if (text.includes(item.name.toLowerCase())) {
 
-          return {
-            found: true,
-            reply:
-              `📄 ${item.name}\n` +
-              `📦 Size: ${sizeKey}\n` +
-              `1 Side: ${sizeData["1"] || "-"} Ks\n` +
-              `2 Side: ${sizeData["2"] || "-"} Ks`
-          };
+        let result = `📄 ${item.name}\n`;
+
+        for (const size in item.sizes) {
+          const s = item.sizes[size];
+
+          result += `\n${size}:\n`;
+          result += `1 Side: ${s["1"] || "-"} Ks\n`;
+          result += `2 Side: ${s["2"] || "-"} Ks\n`;
         }
+
+        return result;
       }
     }
   }
 
-  return {
-    found: false,
-    reply: "❌ မတွေ့ပါ\n📌 Item name သေချာရေးပေးပါ"
-  };
-}
-
-// =======================
-// 🤖 BOT ENTRY POINT
-// =======================
-module.exports = function handlePriceEngine(message) {
-  if (!message) {
-    return "❌ Empty message";
-  }
-
-  const result = findPrice(message);
-
-  return result.reply;
+  return "❌ မတွေ့ပါ";
 };

@@ -1,46 +1,35 @@
 const priceEngine = require("../services/price.engine");
 
-exports.handleMessage = async (req, res) => {
+// Viber response helper
+function sendMessage(res, text) {
+  res.json({
+    status: 0,
+    messages: [
+      {
+        type: "text",
+        text: text
+      }
+    ]
+  });
+}
+
+exports.handleMessage = (req, res) => {
   try {
-    const message = req.body?.message?.text || req.body?.text || "";
+    const message = req.body.message?.text || "";
 
     console.log("📩 Incoming:", message);
 
     if (!message) {
-      return res.json({ reply: "❌ Empty message" });
+      return sendMessage(res, "Hello 👋");
     }
 
-    // 🔥 PRICE ENGINE
-    const priceReply = priceEngine(message);
-    if (priceReply) {
-      return res.json({ reply: priceReply });
-    }
+    // price check
+    const reply = priceEngine(message);
 
-    // 💬 BASIC RESPONSES
-    const text = message.toLowerCase();
-
-    if (text.includes("hi")) {
-      return res.json({
-        reply: "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်"
-      });
-    }
-
-    if (text.includes("order")) {
-      return res.json({
-        reply:
-          "📦 Order:\n1️⃣ Item\n2️⃣ Size\n3️⃣ Qty\n4️⃣ Phone"
-      });
-    }
-
-    return res.json({
-      reply: "❌ မတွေ့ပါ"
-    });
+    return sendMessage(res, reply);
 
   } catch (err) {
-    console.log("❌ ERROR:", err.message);
-
-    return res.json({
-      reply: "⚠️ System Error"
-    });
+    console.log("BOT ERROR:", err);
+    return sendMessage(res, "❌ Server error");
   }
 };
