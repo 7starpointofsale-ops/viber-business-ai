@@ -4,46 +4,32 @@
   <title>Price Admin Panel</title>
 
   <style>
-    body {
-      font-family: Arial;
-      background: #0f172a;
-      color: white;
-      padding: 20px;
-    }
-
-    h2 { color: #38bdf8; }
+    body { font-family: Arial; background:#0f172a; color:white; padding:20px; }
 
     input, select, button {
-      padding: 10px;
-      margin: 5px;
-      border-radius: 6px;
-      border: none;
+      padding:10px;
+      margin:5px;
+      border-radius:6px;
+      border:none;
     }
 
-    input, select { width: 180px; }
-
-    button {
-      background: #38bdf8;
-      color: black;
-      cursor: pointer;
-    }
+    button { background:#38bdf8; cursor:pointer; }
 
     table {
-      width: 100%;
-      margin-top: 20px;
-      border-collapse: collapse;
-      background: #1e293b;
+      width:100%;
+      margin-top:20px;
+      border-collapse:collapse;
+      background:#1e293b;
     }
 
     th, td {
-      padding: 10px;
-      border-bottom: 1px solid #334155;
-      text-align: left;
+      padding:10px;
+      border-bottom:1px solid #334155;
     }
 
-    th { background: #334155; }
+    th { background:#334155; }
 
-    .delete { background: red; color: white; }
+    .delete { background:red; color:white; }
   </style>
 </head>
 
@@ -51,44 +37,41 @@
 
 <h2>📊 Price Admin Panel</h2>
 
-<!-- TYPE -->
-<select id="type" onchange="toggleMode()">
-  <option value="table">Table Item (A4 / sqft)</option>
-  <option value="fixed">Fixed Price (Stamp / Bond)</option>
+<select id="type" onchange="toggle()">
+  <option value="table">Table (A4 / sqft)</option>
+  <option value="fixed">Fixed (Stamp / Bond)</option>
 </select>
 
-<br/>
+<br>
 
 <input id="category" placeholder="Category">
 <input id="item" placeholder="Item Name">
 
-<!-- TABLE MODE -->
-<div id="tableMode">
-  <input id="size" placeholder="Size (A4 / 1 sqft)">
+<div id="tableBox">
+  <input id="size" placeholder="Size">
   <input id="side1" placeholder="1 Side">
   <input id="side2" placeholder="2 Side">
 </div>
 
-<!-- FIXED MODE -->
-<div id="fixedMode" style="display:none;">
-  <input id="fixedValue" placeholder="Value (100 / 200 / 500)">
-  <input id="fixedPrice" placeholder="Price (Ks)">
+<div id="fixedBox" style="display:none;">
+  <input id="fixedValue" placeholder="Value (100 / 200)">
+  <input id="fixedPrice" placeholder="Price">
 </div>
 
-<button onclick="addItem()">➕ Save</button>
+<button onclick="save()">➕ Save</button>
 
 <table>
   <thead>
     <tr>
       <th>Category</th>
       <th>Item</th>
-      <th>Size / Value</th>
+      <th>Key</th>
       <th>1</th>
       <th>2</th>
       <th>Action</th>
     </tr>
   </thead>
-  <tbody id="tableBody"></tbody>
+  <tbody id="tb"></tbody>
 </table>
 
 <script src="app.js"></script>

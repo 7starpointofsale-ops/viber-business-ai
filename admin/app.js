@@ -1,69 +1,31 @@
-function toggleMode() {
-  const type = document.getElementById("type").value;
+function toggle() {
+  const t = document.getElementById("type").value;
 
-  document.getElementById("tableMode").style.display =
-    type === "table" ? "block" : "none";
+  document.getElementById("tableBox").style.display =
+    t === "table" ? "block" : "none";
 
-  document.getElementById("fixedMode").style.display =
-    type === "fixed" ? "block" : "none";
+  document.getElementById("fixedBox").style.display =
+    t === "fixed" ? "block" : "none";
 }
 
-// ===================== LOAD
-async function loadData() {
-  const res = await fetch("/api/prices");
-  const data = await res.json();
-
-  const tbody = document.getElementById("tableBody");
-  tbody.innerHTML = "";
-
-  data.categories.forEach(cat => {
-    cat.items.forEach(item => {
-
-      const sizes = item.sizes;
-
-      Object.keys(sizes).forEach(size => {
-        const val = sizes[size];
-
-        const row = document.createElement("tr");
-
-        row.innerHTML = `
-          <td>${cat.name}</td>
-          <td>${item.name}</td>
-          <td>${size}</td>
-          <td>${val["1"] ?? "-"}</td>
-          <td>${val["2"] ?? "-"}</td>
-          <td>
-            <button class="delete" onclick="deleteItem('${cat.name}','${item.name}','${size}')">
-              X
-            </button>
-          </td>
-        `;
-
-        tbody.appendChild(row);
-      });
-    });
-  });
-}
-
-// ===================== ADD (FIXED + TABLE BOTH SUPPORT)
-async function addItem() {
+async function save() {
   const type = document.getElementById("type").value;
 
-  let body = {
-    category: document.getElementById("category").value,
-    item: document.getElementById("item").value,
+  const body = {
+    category: category.value,
+    item: item.value,
     type
   };
 
   if (type === "table") {
-    body.size = document.getElementById("size").value;
-    body.side1 = document.getElementById("side1").value;
-    body.side2 = document.getElementById("side2").value;
+    body.size = size.value;
+    body.side1 = side1.value;
+    body.side2 = side2.value;
   }
 
   if (type === "fixed") {
-    body.fixedValue = document.getElementById("fixedValue").value;
-    body.fixedPrice = document.getElementById("fixedPrice").value;
+    body.fixedValue = fixedValue.value;
+    body.fixedPrice = fixedPrice.value;
   }
 
   await fetch("/api/add-item", {
@@ -72,19 +34,45 @@ async function addItem() {
     body: JSON.stringify(body)
   });
 
-  alert("Saved ✅");
-  loadData();
+  load();
 }
 
-// ===================== DELETE
-async function deleteItem(category, item, size) {
-  await fetch("/api/delete-item", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ category, item, size })
+async function load() {
+  const res = await fetch("/api/prices");
+  const data = await res.json();
+
+  const tb = document.getElementById("tb");
+  tb.innerHTML = "";
+
+  data.categories.forEach(cat => {
+    cat.items.forEach(item => {
+      Object.keys(item.prices).forEach(k => {
+        const v = item.prices[k];
+
+        if (typeof v === "object") {
+          tb.innerHTML += `
+            <tr>
+              <td>${cat.name}</td>
+              <td>${item.name}</td>
+              <td>${k}</td>
+              <td>${v["1"] || "-"}</td>
+              <td>${v["2"] || "-"}</td>
+            </tr>
+          `;
+        } else {
+          tb.innerHTML += `
+            <tr>
+              <td>${cat.name}</td>
+              <td>${item.name}</td>
+              <td>${k}</td>
+              <td>${v}</td>
+              <td>-</td>
+            </tr>
+          `;
+        }
+      });
+    });
   });
-
-  loadData();
 }
 
-loadData();
+load();
