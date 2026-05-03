@@ -1,0 +1,12 @@
+{
+  "art_card_250": {
+    "name": "Art Card 250g",
+    "1side": 1900,
+    "2side": 2500
+  },
+  "art_card_300": {
+    "name": "Art Card 300g",
+    "1side": 2200,
+    "2side": 2800
+  }
+}

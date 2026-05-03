@@ -1,80 +1,77 @@
 const express = require("express");
 const bodyParser = require("body-parser");
+const fs = require("fs");
+const path = require("path");
 require("dotenv").config();
 
 const { sendMessage } = require("./services/viber.service");
+const { findPrice } = require("./services/price.engine");
 
 const app = express();
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// HEALTH CHECK
-app.get("/", (req, res) => {
-  res.send("🚀 Viber Business AI Running");
-});
+const dbPath = path.join(__dirname, "../database/price.db.json");
 
-// WEBHOOK
+// ======================
+// VIBER WEBHOOK
+// ======================
 app.post("/webhook", async (req, res) => {
   const data = req.body;
-
-  console.log("📩 Incoming:", data);
 
   const text = data?.message?.text?.toLowerCase();
   const userId = data?.sender?.id;
 
   if (!text || !userId) return res.sendStatus(200);
 
-  let reply = "မင်္ဂလာပါ 👋 ဘာကူညီရမလဲ?";
+  let reply = findPrice(text);
 
-  // =========================
-  // 🤖 SMART PRINTING BOT
-  // =========================
-
-  // Greeting
-  if (text.includes("hi") || text.includes("hello")) {
-    reply = "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
+  if (!reply) {
+    if (text.includes("hi")) reply = "Hello 👋 Printing AI Bot";
+    else if (text.includes("order")) reply = "Order details ပို့ပါ";
+    else reply = "help လို့ရိုက်ပါ";
   }
 
-  // PRICE SYSTEM
-  else if (text.includes("art card 250")) {
-    reply = "📄 Art Card 250g\n1 Side: 1900 Ks\n2 Side: 2500 Ks";
-  }
-
-  else if (text.includes("art card 300")) {
-    reply = "📄 Art Card 300g\n1 Side: 2200 Ks\n2 Side: 2800 Ks";
-  }
-
-  else if (text.includes("digital press")) {
-    reply = "🖨 Digital Press Price ရှာရန် A4 / 13x19 / Art Paper စမ်းပါ";
-  }
-
-  // ORDER SYSTEM
-  else if (text.includes("order")) {
-    reply =
-      "📦 Order လုပ်ရန်:\n" +
-      "1️⃣ Item name\n2️⃣ Size\n3️⃣ Quantity\n4️⃣ Phone number ပို့ပေးပါ";
-  }
-
-  // HELP
-  else if (text.includes("help")) {
-    reply =
-      "🆘 Commands:\n" +
-      "- hi\n- art card 250\n- art card 300\n- order\n- price";
-  }
-
-  // DEFAULT
-  else {
-    reply = "❓ မသိသေးပါ\n'help' ရိုက်ပြီး command ကြည့်ပါ";
-  }
-
-  // SEND TO VIBER
   await sendMessage(userId, reply);
 
   res.sendStatus(200);
 });
 
-// START SERVER
+// ======================
+// ADMIN PANEL (HTML UI)
+// ======================
+app.get("/admin", (req, res) => {
+  res.send(`
+    <h2>💎 Admin Panel</h2>
+
+    <form method="POST" action="/update">
+      <input name="key" placeholder="art_card_250" /><br><br>
+      <input name="side" placeholder="1side or 2side" /><br><br>
+      <input name="price" placeholder="New Price" /><br><br>
+      <button type="submit">Update Price</button>
+    </form>
+  `);
+});
+
+// ======================
+// UPDATE PRICE API
+// ======================
+app.post("/update", (req, res) => {
+  const { key, side, price } = req.body;
+
+  const db = JSON.parse(fs.readFileSync(dbPath, "utf8"));
+
+  if (db[key]) {
+    db[key][side] = Number(price);
+    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+  }
+
+  res.send("✅ Price Updated Successfully");
+});
+
+// ======================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("✅ Server running on port", PORT);
+  console.log("🚀 Server running on port", PORT);
 });
