@@ -1,32 +1,32 @@
 const fs = require("fs");
 const path = require("path");
 
-let DB = null;
-
-// FIXED PATH (Render + Local OK)
 const dbPath = path.join(__dirname, "../database/price.db.json");
 
+let DB = null;
+
+// LOAD DB
 function loadDB() {
   try {
     const raw = fs.readFileSync(dbPath, "utf8");
     DB = JSON.parse(raw);
     console.log("✅ PRICE DB LOADED");
   } catch (err) {
-    console.error("❌ PRICE DB LOAD ERROR:", err.message);
+    console.log("❌ DB ERROR:", err.message);
     DB = { categories: [] };
   }
 }
 
-// normalize text
+// NORMALIZE (IMPORTANT FIX)
 function norm(text = "") {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")   // 🔥 IMPORTANT FIX
     .replace(/\s+/g, " ")
     .trim();
 }
 
-// fuzzy search
+// SMART MATCH (FIXED)
 function getPrice(text = "") {
   if (!DB) return null;
 
@@ -36,6 +36,7 @@ function getPrice(text = "") {
     for (const item of cat.items) {
       const itemName = norm(item.name);
 
+      // 🔥 SMART MATCH (KEY FIX)
       if (msg.includes(itemName)) {
         let reply = `📄 ${item.name}\n\n`;
 
