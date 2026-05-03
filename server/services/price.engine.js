@@ -1,54 +1,54 @@
 const fs = require("fs");
 const path = require("path");
 
-const dbPath = path.join(__dirname, "../database/price.db.json");
+// 👉 FIXED PATH (YOUR STRUCTURE)
+const dbPath = path.join(__dirname, "../../database/price.db.json");
 
 let DB = null;
 
-// LOAD DB
+// ===============================
+// LOAD DB SAFE
+// ===============================
 function loadDB() {
   try {
-    const raw = fs.readFileSync(dbPath, "utf8");
+    if (!fs.existsSync(dbPath)) {
+      console.error("❌ PRICE DB FILE NOT FOUND:", dbPath);
+      DB = { categories: [] };
+      return;
+    }
+
+    const raw = fs.readFileSync(dbPath, "utf-8");
     DB = JSON.parse(raw);
+
     console.log("✅ PRICE DB LOADED");
   } catch (err) {
-    console.log("❌ DB ERROR:", err.message);
+    console.error("❌ DB LOAD ERROR:", err.message);
     DB = { categories: [] };
   }
 }
 
-// NORMALIZE (IMPORTANT FIX)
-function norm(text = "") {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")   // 🔥 IMPORTANT FIX
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-// SMART MATCH (FIXED)
+// ===============================
+// PRICE SEARCH ENGINE
+// ===============================
 function getPrice(text = "") {
-  if (!DB) return null;
+  if (!DB || !DB.categories) return null;
 
-  const msg = norm(text);
+  const msg = text.toLowerCase();
 
   for (const cat of DB.categories) {
     for (const item of cat.items) {
-      const itemName = norm(item.name);
+      const name = item.name.toLowerCase();
 
-      // 🔥 SMART MATCH (KEY FIX)
-      if (msg.includes(itemName)) {
-        let reply = `📄 ${item.name}\n\n`;
+      if (msg.includes(name)) {
+        const sizeKeys = Object.keys(item.sizes);
+        const size = sizeKeys[0];
 
-        for (const [size, prices] of Object.entries(item.sizes)) {
-          reply += `${size}:\n`;
-          for (const [side, price] of Object.entries(prices)) {
-            reply += `${side} Side: ${price} Ks\n`;
-          }
-          reply += `\n`;
-        }
+        const side = msg.includes("2 side") ? "2" : "1";
+        const price = item.sizes[size]?.[side];
 
-        return reply.trim();
+        if (!price) return `❌ Price မတွေ့ပါ`;
+
+        return `📄 ${item.name}\n\n${size}:\n${side} Side: ${price} Ks`;
       }
     }
   }
