@@ -1,76 +1,83 @@
 const fs = require("fs");
 const path = require("path");
 
-const dbPath = path.join(__dirname, "../price.db.json");
+// ================================
+// 📦 PRICE DB LOAD (SAFE VERSION)
+// ================================
 
-let db = { categories: [] };
+// 🔥 Works both local + Render
+const dbPath = path.join(process.cwd(), "price.db.json");
 
+let db = {
+  categories: []
+};
+
+// ================================
+// 📥 LOAD DATABASE
+// ================================
 try {
-  db = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
-} catch (err) {
-  console.error("PRICE DB ERROR:", err);
-}
+  const raw = fs.readFileSync(dbPath, "utf-8");
+  const parsed = JSON.parse(raw);
 
-// 🔥 normalize helper
-function norm(text) {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/[^a-z0-9]/g, "");
-}
-
-/**
- * 🔍 SMART FIND ENGINE
- * input: "art card 250 a4 1side"
- */
-exports.find = (input) => {
-  if (!input) return null;
-
-  const query = norm(input);
-
-  for (const cat of db.categories) {
-    for (const item of cat.items) {
-      const itemName = norm(item.name);
-
-      if (query.includes(itemName)) {
-
-        // 🔍 size detect
-        let selectedSize = null;
-        let selectedPrice = null;
-
-        for (const sizeKey in item.sizes) {
-          const sizeNorm = norm(sizeKey);
-
-          if (query.includes(sizeNorm)) {
-            selectedSize = sizeKey;
-            break;
-          }
-        }
-
-        // fallback size (first one)
-        if (!selectedSize) {
-          selectedSize = Object.keys(item.sizes)[0];
-        }
-
-        const sizeData = item.sizes[selectedSize];
-
-        // 🔢 side detect (1 / 2)
-        let side = "1";
-
-        if (query.includes("2")) side = "2";
-
-        selectedPrice = sizeData[side] || sizeData["1"];
-
-        return {
-          name: item.name,
-          category: cat.name,
-          size: selectedSize,
-          side: side,
-          price: selectedPrice
-        };
-      }
-    }
+// safety check
+  if (parsed && Array.isArray(parsed.categories)) {
+    db = parsed;
+  } else {
+    console.error("⚠️ Invalid DB structure: categories not found");
+    db = { categories: [] };
   }
 
-  return null;
+} catch (err) {
+  console.error("❌ PRICE DB ERROR:", err.message);
+  db = { categories: [] };
+}
+
+// ================================
+// 💰 PRICE ENGINE
+// ================================
+module.exports = function getPrice(query) {
+  try {
+    if (!query) return null;
+
+    const text = query.toLowerCase();
+
+    // loop safely
+    for (const category of db.categories || []) {
+      for (const item of category.items || []) {
+
+        const itemName = item.name.toLowerCase();
+
+        if (text.includes(itemName)) {
+
+          // size match
+          for (const sizeKey in item.sizes) {
+            if (text.includes(sizeKey.toLowerCase())) {
+
+              const sizeData = item.sizes[sizeKey];
+
+              return {
+                category: category.name,
+                item: item.name,
+                size: sizeKey,
+                price: sizeData
+              };
+            }
+          }
+
+          // if no size matched → return item info
+          return {
+            category: category.name,
+            item: item.name,
+            sizes: item.sizes
+          };
+        }
+      }
+    }
+
+    return null;
+
+  } catch (err) {
+    console.error("PRICE ENGINE ERROR:", err.message);
+    return null;
+  }
 };
