@@ -6,41 +6,30 @@ async function loadData() {
   tbody.innerHTML = "";
 
   data.categories.forEach(cat => {
-
-    let first = true;
-
     cat.items.forEach(item => {
-
       Object.keys(item.sizes).forEach(size => {
 
-        const row = document.createElement("tr");
+        const tr = document.createElement("tr");
 
-        row.innerHTML = `
-          <td>${first ? cat.name : ""}</td>
+        tr.innerHTML = `
+          <td>${cat.name}</td>
           <td>${item.name}</td>
           <td>${size}</td>
-          <td>${item.sizes[size]["1"] || 0}</td>
-          <td>${item.sizes[size]["2"] || 0}</td>
-          <td>
-            <button class="delete" onclick="deleteItem('${cat.name}','${item.name}','${size}')">
-              Delete
-            </button>
-          </td>
+          <td>${item.sizes[size]["1"]}</td>
+          <td>${item.sizes[size]["2"] || "-"}</td>
+          <td><button class="delete" onclick="del('${cat.name}','${item.name}','${size}')">X</button></td>
         `;
 
-        first = false;
-        tbody.appendChild(row);
+        tbody.appendChild(tr);
       });
-
     });
-
   });
 }
 
 async function addItem() {
   await fetch("/api/add-item", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {"Content-Type":"application/json"},
     body: JSON.stringify({
       category: category.value,
       item: item.value,
@@ -53,11 +42,11 @@ async function addItem() {
   loadData();
 }
 
-async function deleteItem(category, item, size) {
+async function del(c,i,s){
   await fetch("/api/delete-item", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ category, item, size })
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({category:c,item:i,size:s})
   });
 
   loadData();

@@ -37,13 +37,6 @@
             "A4": { "1": 2700, "2": 3800 },
             "13x19": { "1": 5800, "2": 7500 }
           }
-        },
-        {
-          "name": "Art Card 350g",
-          "sizes": {
-            "A4": { "1": 2400, "2": 3000 },
-            "13x19": { "1": 5800, "2": 7500 }
-          }
         }
       ]
     },
@@ -62,30 +55,6 @@
           "sizes": {
             "A4": { "1": 18000, "2": 26000 }
           }
-        },
-        {
-          "name": "Art Card 250g + Plastic",
-          "sizes": {
-            "A4": { "1": 28000, "2": 35000 }
-          }
-        },
-        {
-          "name": "Art Card 300g",
-          "sizes": {
-            "A4": { "1": 17000, "2": 24000 }
-          }
-        },
-        {
-          "name": "Art Card 300g + Lamination",
-          "sizes": {
-            "A4": { "1": 20000, "2": 29000 }
-          }
-        },
-        {
-          "name": "Art Card 300g + Plastic",
-          "sizes": {
-            "A4": { "1": 31000, "2": 37000 }
-          }
         }
       ]
     },
@@ -100,13 +69,13 @@
           }
         },
         {
-          "name": "PVC UV Flatbed (Thick)",
+          "name": "PVC UV Thick",
           "sizes": {
             "Standard": { "1": 5000, "2": 6000 }
           }
         },
         {
-          "name": "PVC UV Flatbed (Thin)",
+          "name": "PVC UV Thin",
           "sizes": {
             "Standard": { "1": 3500, "2": 4500 }
           }
@@ -143,13 +112,7 @@
           }
         },
         {
-          "name": "Window Stand",
-          "sizes": {
-            "Standard": { "1": 150000 }
-          }
-        },
-        {
-          "name": "Roll up Stand",
+          "name": "Roll Up Stand",
           "sizes": {
             "Standard": { "1": 400000 }
           }
@@ -167,27 +130,9 @@
           }
         },
         {
-          "name": "UV Sticker + Cutting",
-          "sizes": {
-            "per set": { "1": 5000 }
-          }
-        },
-        {
           "name": "Art Paper Sticker",
           "sizes": {
             "single": { "1": 3500 }
-          }
-        },
-        {
-          "name": "PP Sticker",
-          "sizes": {
-            "1000-3000 pcs": { "1": 4500 }
-          }
-        },
-        {
-          "name": "Transparent Sticker",
-          "sizes": {
-            "single": { "1": 6000 }
           }
         }
       ]
@@ -207,12 +152,6 @@
           "sizes": {
             "Standard": { "1": 7000 }
           }
-        },
-        {
-          "name": "Prop Board",
-          "sizes": {
-            "1x1": { "1": 15000 }
-          }
         }
       ]
     },
@@ -224,18 +163,6 @@
           "name": "A4",
           "sizes": {
             "A4": { "1": 800, "2": 1500 }
-          }
-        },
-        {
-          "name": "Legal",
-          "sizes": {
-            "Legal": { "1": 1500, "2": 2000 }
-          }
-        },
-        {
-          "name": "A3",
-          "sizes": {
-            "A3": { "1": 1500, "2": 2000 }
           }
         }
       ]
@@ -249,18 +176,6 @@
           "sizes": {
             "A4": { "1": 150, "2": 200 }
           }
-        },
-        {
-          "name": "Legal",
-          "sizes": {
-            "Legal": { "1": 200, "2": 300 }
-          }
-        },
-        {
-          "name": "A3",
-          "sizes": {
-            "A3": { "1": 500, "2": 800 }
-          }
         }
       ]
     },
@@ -269,31 +184,13 @@
       "name": "Photo Print",
       "items": [
         {
-          "name": "Small size",
-          "sizes": {
-            "1.8x2.7": { "1": 500 }
-          }
-        },
-        {
-          "name": "Medium size",
-          "sizes": {
-            "2.6x3.6": { "1": 750 }
-          }
-        },
-        {
           "name": "4x6",
           "sizes": {
             "4x6": { "1": 1000 }
           }
         },
         {
-          "name": "6x8",
-          "sizes": {
-            "6x8": { "1": 1500 }
-          }
-        },
-        {
-          "name": "A4",
+          "name": "A4 Photo",
           "sizes": {
             "A4": { "1": 2000, "2": 2500 }
           }

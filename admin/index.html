@@ -1,81 +1,41 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Panel</title>
-
-  <style>
-    body {
-      font-family: Arial;
-      background: #0f172a;
-      color: white;
-      padding: 20px;
-    }
-
-    h2 { color: #38bdf8; }
-
-    input, button {
-      padding: 10px;
-      margin: 5px;
-      border-radius: 6px;
-      border: none;
-    }
-
-    input { width: 180px; }
-
-    button {
-      background: #38bdf8;
-      color: black;
-      cursor: pointer;
-    }
-
-    table {
-      width: 100%;
-      margin-top: 20px;
-      border-collapse: collapse;
-      background: #1e293b;
-    }
-
-    th, td {
-      padding: 10px;
-      border-bottom: 1px solid #334155;
-    }
-
-    th { background: #334155; }
-
-    .delete {
-      background: red;
-      color: white;
-    }
-  </style>
+<title>Admin Panel</title>
+<style>
+body{background:#0f172a;color:white;font-family:Arial;padding:20px}
+input,button{padding:10px;margin:5px}
+table{width:100%;margin-top:20px;background:#1e293b;border-collapse:collapse}
+th,td{padding:10px;border:1px solid #334155}
+button{background:#38bdf8}
+.delete{background:red;color:white}
+</style>
 </head>
 
 <body>
 
-<h2>📊 Price Admin Panel</h2>
+<h2>Price Admin</h2>
 
-<div>
-  <input id="category" placeholder="Category">
-  <input id="item" placeholder="Item">
-  <input id="size" placeholder="Size">
-  <input id="side1" placeholder="1 Side">
-  <input id="side2" placeholder="2 Side">
+<input id="category" placeholder="Category">
+<input id="item" placeholder="Item">
+<input id="size" placeholder="Size">
+<input id="side1" placeholder="1 Side">
+<input id="side2" placeholder="2 Side">
 
-  <button onclick="addItem()">Save</button>
-</div>
+<button onclick="addItem()">Save</button>
 
 <table>
-  <thead>
-    <tr>
-      <th>Category</th>
-      <th>Item</th>
-      <th>Size</th>
-      <th>1 Side</th>
-      <th>2 Side</th>
-      <th>Action</th>
-    </tr>
-  </thead>
-
-  <tbody id="tableBody"></tbody>
+<thead>
+<tr>
+<th>Category</th>
+<th>Item</th>
+<th>Size</th>
+<th>1</th>
+<th>2</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
 </table>
 
 <script src="app.js"></script>
