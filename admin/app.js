@@ -1,96 +1,70 @@
-async function loadData() {
+function toggle() {
+  const t = document.getElementById("type").value;
+
+  document.getElementById("sizeBox").style.display =
+    (t === "normal" || t === "mixed") ? "block" : "none";
+
+  document.getElementById("qtyBox").style.display =
+    (t === "fixed" || t === "mixed") ? "block" : "none";
+}
+
+async function save() {
+  await fetch("/api/add-item", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      category: category.value,
+      item: item.value,
+      type: type.value,
+      size: size.value,
+      side1: side1.value,
+      side2: side2.value,
+      qty: qty.value,
+      price: price.value
+    })
+  });
+
+  load();
+}
+
+async function load() {
   const res = await fetch("/api/prices");
   const data = await res.json();
 
-  const tbody = document.getElementById("tableBody");
-  tbody.innerHTML = "";
+  const tb = document.getElementById("tb");
+  tb.innerHTML = "";
 
   data.categories.forEach(cat => {
     cat.items.forEach(item => {
-      Object.keys(item.sizes).forEach(size => {
 
-        const s = item.sizes[size];
+      Object.keys(item.prices).forEach(k => {
+        const v = item.prices[k];
 
-        const row = document.createElement("tr");
-
-        row.innerHTML = `
-          <td>${cat.name}</td>
-          <td>${item.name}</td>
-          <td>${size}</td>
-
-          <td>
-            <input class="row-input" value="${s["1"]}" id="i1_${cat.name}_${item.name}_${size}">
-          </td>
-
-          <td>
-            <input class="row-input" value="${s["2"] || ""}" id="i2_${cat.name}_${item.name}_${size}">
-          </td>
-
-          <td>
-            <button class="edit" onclick="saveEdit('${cat.name}','${item.name}','${size}')">Save</button>
-            <button class="delete" onclick="deleteItem('${cat.name}','${item.name}','${size}')">X</button>
-          </td>
-        `;
-
-        tbody.appendChild(row);
+        if (typeof v === "object") {
+          tb.innerHTML += `
+            <tr>
+              <td>${cat.name}</td>
+              <td>${item.name}</td>
+              <td>${k}</td>
+              <td>${v["1"]}</td>
+              <td>${v["2"] || "-"}</td>
+            </tr>
+          `;
+        } else {
+          tb.innerHTML += `
+            <tr>
+              <td>${cat.name}</td>
+              <td>${item.name}</td>
+              <td>${k}</td>
+              <td>${v}</td>
+              <td>-</td>
+            </tr>
+          `;
+        }
       });
+
     });
   });
 }
 
-// ======================
-// ADD ITEM
-// ======================
-async function addItem() {
-  await fetch("/api/add-item", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      category: category.value,
-      item: item.value,
-      size: size.value,
-      side1: side1.value,
-      side2: side2.value
-    })
-  });
-
-  loadData();
-}
-
-// ======================
-// SAVE EDIT
-// ======================
-async function saveEdit(cat, item, size) {
-
-  const i1 = document.getElementById(`i1_${cat}_${item}_${size}`).value;
-  const i2 = document.getElementById(`i2_${cat}_${item}_${size}`).value;
-
-  await fetch("/api/add-item", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      category: cat,
-      item,
-      size,
-      side1: i1,
-      side2: i2
-    })
-  });
-
-  loadData();
-}
-
-// ======================
-// DELETE
-// ======================
-async function deleteItem(category, item, size) {
-  await fetch("/api/delete-item", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ category, item, size })
-  });
-
-  loadData();
-}
-
-loadData();
+load();

@@ -4,58 +4,13 @@
   <title>Price Admin</title>
 
   <style>
-    body {
-      font-family: Arial;
-      background: #0f172a;
-      color: white;
-      padding: 20px;
-    }
+    body { background:#0f172a; color:white; font-family:Arial; padding:20px; }
+    input, select { padding:8px; margin:5px; }
+    button { padding:8px; cursor:pointer; }
 
-    h2 { color: #38bdf8; }
-
-    input {
-      padding: 8px;
-      margin: 5px;
-      border-radius: 6px;
-      border: none;
-      width: 140px;
-    }
-
-    button {
-      padding: 8px 12px;
-      border: none;
-      border-radius: 6px;
-      background: #38bdf8;
-      cursor: pointer;
-    }
-
-    table {
-      width: 100%;
-      margin-top: 20px;
-      border-collapse: collapse;
-      background: #1e293b;
-    }
-
-    th, td {
-      padding: 10px;
-      border-bottom: 1px solid #334155;
-    }
-
-    th { background: #334155; }
-
-    .delete {
-      background: red;
-      color: white;
-    }
-
-    .edit {
-      background: orange;
-      color: black;
-    }
-
-    .row-input {
-      width: 80px;
-    }
+    table { width:100%; margin-top:20px; border-collapse:collapse; }
+    th, td { border:1px solid #334155; padding:8px; }
+    th { background:#334155; }
   </style>
 </head>
 
@@ -63,30 +18,42 @@
 
 <h2>📊 Price Admin Panel</h2>
 
-<!-- ADD FORM -->
-<div>
-  <input id="category" placeholder="Category">
-  <input id="item" placeholder="Item">
+<select id="type" onchange="toggle()">
+  <option value="normal">Normal (Size)</option>
+  <option value="fixed">Fixed (Qty)</option>
+  <option value="mixed">Mixed (Both)</option>
+</select>
+
+<br>
+
+<input id="category" placeholder="Category">
+<input id="item" placeholder="Item Name">
+
+<div id="sizeBox">
   <input id="size" placeholder="Size">
   <input id="side1" placeholder="1 Side">
   <input id="side2" placeholder="2 Side">
-
-  <button onclick="addItem()">➕ Add</button>
 </div>
+
+<div id="qtyBox" style="display:none;">
+  <input id="qty" placeholder="Qty">
+  <input id="price" placeholder="Price">
+</div>
+
+<button onclick="save()">Save</button>
 
 <table>
   <thead>
     <tr>
       <th>Category</th>
       <th>Item</th>
-      <th>Size</th>
-      <th>1</th>
-      <th>2</th>
-      <th>Action</th>
+      <th>Key</th>
+      <th>Price 1</th>
+      <th>Price 2</th>
     </tr>
   </thead>
 
-  <tbody id="tableBody"></tbody>
+  <tbody id="tb"></tbody>
 </table>
 
 <script src="app.js"></script>
