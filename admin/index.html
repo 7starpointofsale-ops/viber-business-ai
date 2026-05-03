@@ -2,21 +2,88 @@
 <html>
 <head>
   <title>Admin Panel</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #0f172a;
+      color: white;
+      padding: 20px;
+    }
+
+    h2 {
+      color: #38bdf8;
+    }
+
+    input, button {
+      padding: 10px;
+      margin: 5px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    input {
+      width: 200px;
+    }
+
+    button {
+      background: #38bdf8;
+      color: black;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      background: #1e293b;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #334155;
+      text-align: left;
+    }
+
+    th {
+      background: #334155;
+    }
+
+    .delete {
+      background: red;
+      color: white;
+    }
+  </style>
+
 </head>
+
 <body>
 
 <h2>📊 Price Admin Panel</h2>
 
-<input id="category" placeholder="Category"><br><br>
-<input id="item" placeholder="Item"><br><br>
-<input id="size" placeholder="Size (a4 / 13x19)"><br><br>
-<input id="side1" placeholder="1 Side Price"><br><br>
-<input id="side2" placeholder="2 Side Price"><br><br>
+<div>
+  <input id="category" placeholder="Category">
+  <input id="item" placeholder="Item">
+  <input id="size" placeholder="Size (a4)">
+  <input id="side1" placeholder="1 Side">
+  <input id="side2" placeholder="2 Side">
 
-<button onclick="addItem()">Add / Update</button>
+  <button onclick="addItem()">Save</button>
+</div>
 
-<h3>📋 Current Data</h3>
-<pre id="output"></pre>
+<table>
+  <thead>
+    <tr>
+      <th>Category</th>
+      <th>Item</th>
+      <th>Size</th>
+      <th>1 Side</th>
+      <th>2 Side</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody id="tableBody"></tbody>
+</table>
 
 <script src="app.js"></script>
 

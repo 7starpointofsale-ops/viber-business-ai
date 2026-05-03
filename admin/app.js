@@ -1,8 +1,33 @@
 async function loadData() {
   const res = await fetch("/api/prices");
   const data = await res.json();
-  document.getElementById("output").textContent =
-    JSON.stringify(data, null, 2);
+
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+
+  data.categories.forEach(cat => {
+    cat.items.forEach(item => {
+      Object.keys(item.sizes).forEach(size => {
+
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+          <td>${cat.name}</td>
+          <td>${item.name}</td>
+          <td>${size}</td>
+          <td>${item.sizes[size]["1"]}</td>
+          <td>${item.sizes[size]["2"]}</td>
+          <td>
+            <button class="delete" onclick="deleteItem('${cat.name}','${item.name}','${size}')">
+              Delete
+            </button>
+          </td>
+        `;
+
+        tbody.appendChild(row);
+      });
+    });
+  });
 }
 
 async function addItem() {
@@ -16,13 +41,21 @@ async function addItem() {
 
   await fetch("/api/add-item", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
 
   alert("Saved ✅");
+  loadData();
+}
+
+async function deleteItem(category, item, size) {
+  await fetch("/api/delete-item", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category, item, size })
+  });
+
   loadData();
 }
 
