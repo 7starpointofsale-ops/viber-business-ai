@@ -1,120 +1,117 @@
 const fs = require("fs");
 const path = require("path");
 
-// ✅ FIXED DB PATH
-const DB_PATH = path.join(__dirname, "../../database/price.db.json");
+// ✅ FIXED: correct DB path (Render + local both work)
+const dbPath = path.join(__dirname, "../database/price.db.json");
 
-let db = { categories: [] };
+let priceDB = null;
 
-try {
-  const raw = fs.readFileSync(DB_PATH, "utf-8");
-  db = JSON.parse(raw);
-  console.log("✅ PRICE DB LOADED");
-} catch (err) {
-  console.log("❌ PRICE DB LOAD ERROR:", err.message);
+// ---------- LOAD DB ----------
+function loadDB() {
+  try {
+    const raw = fs.readFileSync(dbPath, "utf-8");
+    priceDB = JSON.parse(raw);
+    console.log("✅ PRICE DB LOADED");
+  } catch (err) {
+    console.error("❌ PRICE DB LOAD ERROR:", err.message);
+    priceDB = null;
+  }
 }
 
-/* -------------------------------
-   🧠 TEXT NORMALIZE (IMPORTANT)
---------------------------------*/
+// ---------- NORMALIZE TEXT ----------
 function normalize(text = "") {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\u1000-\u109f\s]/g, " ") // keep burmese + numbers
+    .replace(/[^a-z0-9\u1000-\u109f\s]/g, " ") // English + Myanmar support
     .replace(/\s+/g, " ")
     .trim();
 }
 
-/* -------------------------------
-   🔍 EXTRACT INFO
---------------------------------*/
-function extractNumber(text) {
-  const match = text.match(/\d+/);
-  return match ? match[0] : null;
-}
+// ---------- FIND BEST MATCH ----------
+function findMatch(input) {
+  if (!priceDB) return null;
 
-function detectSide(text) {
-  if (text.includes("2")) return 2;
-  if (text.includes("one") || text.includes("1")) return 1;
-  return null;
-}
-
-/* -------------------------------
-   🧠 SMART MATCH ENGINE
---------------------------------*/
-function findBestMatch(text) {
-  const msg = normalize(text);
-  const num = extractNumber(msg);
+  const q = normalize(input);
 
   let best = null;
-  let bestScore = 0;
 
-  for (const cat of db.categories) {
+  for (const cat of priceDB.categories) {
     for (const item of cat.items) {
       const itemName = normalize(item.name);
 
+      // strict includes match first
+      if (q.includes(itemName)) {
+        return { cat, item };
+      }
+
+      // fuzzy partial scoring
+      const words = itemName.split(" ");
       let score = 0;
 
-      // 🔥 name match
-      if (msg.includes(itemName)) score += 5;
-
-      // 🔥 partial keyword match
-      const words = itemName.split(" ");
-      for (let w of words) {
-        if (w && msg.includes(w)) score += 1;
+      for (const w of words) {
+        if (q.includes(w)) score++;
       }
 
-      // 🔥 number match (250g etc)
-      if (num && itemName.includes(num)) score += 3;
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = item;
+      if (!best || score > best.score) {
+        best = { cat, item, score };
       }
     }
   }
 
-  return bestScore >= 3 ? best : null;
-}
-
-/* -------------------------------
-   💬 RESPONSE FORMATTER
---------------------------------*/
-function formatReply(item) {
-  if (!item) return "❌ မတွေ့ပါ";
-
-  let reply = `📄 ${item.name}\n\n`;
-
-  for (const size in item.sizes) {
-    reply += `${size}:\n`;
-    reply += `1 Side: ${item.sizes[size]["1"]} Ks\n`;
-
-    if (item.sizes[size]["2"]) {
-      reply += `2 Side: ${item.sizes[size]["2"]} Ks\n`;
-    }
-
-    reply += `\n`;
+  // minimum threshold
+  if (best && best.score >= 1) {
+    return best;
   }
 
-  return reply;
+  return null;
 }
 
-/* -------------------------------
-   🚀 MAIN EXPORT
---------------------------------*/
-module.exports = function (msg) {
-  const text = msg.trim();
+// ---------- CALCULATE PRICE ----------
+function calculate(input) {
+  const match = findMatch(input);
 
-  // 🧮 simple math support
-  if (/^\d+\s*[\+\-\*\/]\s*\d+$/.test(text)) {
-    try {
-      return "🧮 Result: " + eval(text);
-    } catch {
-      return "❌ မတွက်နိုင်ပါ";
-    }
+  if (!match) {
+    return "❌ မတွေ့ပါ";
   }
 
-  const result = findBestMatch(text);
+  const { item } = match;
 
-  return formatReply(result);
+  // extract size (A4, 13x19, etc.)
+  const sizeKeys = Object.keys(item.sizes);
+
+  let selectedSize = sizeKeys.find(s =>
+    normalize(input).includes(normalize(s))
+  );
+
+  if (!selectedSize) {
+    selectedSize = sizeKeys[0]; // fallback first size
+  }
+
+  const sizeData = item.sizes[selectedSize];
+
+  if (!sizeData) {
+    return `❌ Size မတွေ့ပါ (${item.name})`;
+  }
+
+  // detect side
+  const inputLower = input.toLowerCase();
+
+  let side = "1";
+
+  if (inputLower.includes("2 side") || inputLower.includes("2side")) {
+    side = "2";
+  }
+
+  if (inputLower.includes("1 side") || inputLower.includes("1side")) {
+    side = "1";
+  }
+
+  const price = sizeData[side] || sizeData["1"];
+
+  return `📄 ${item.name}\n\n${selectedSize}:\n${side} Side: ${price} Ks`;
+}
+
+module.exports = {
+  loadDB,
+  calculate
 };
