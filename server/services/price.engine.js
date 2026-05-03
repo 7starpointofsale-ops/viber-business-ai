@@ -1,54 +1,65 @@
 const fs = require("fs");
 const path = require("path");
 
-// 👉 FIXED PATH (YOUR STRUCTURE)
 const dbPath = path.join(__dirname, "../../database/price.db.json");
 
 let DB = null;
 
-// ===============================
+// =====================
 // LOAD DB SAFE
-// ===============================
+// =====================
 function loadDB() {
   try {
     if (!fs.existsSync(dbPath)) {
-      console.error("❌ PRICE DB FILE NOT FOUND:", dbPath);
+      console.error("❌ DB NOT FOUND:", dbPath);
       DB = { categories: [] };
       return;
     }
 
-    const raw = fs.readFileSync(dbPath, "utf-8");
-    DB = JSON.parse(raw);
-
-    console.log("✅ PRICE DB LOADED");
-  } catch (err) {
-    console.error("❌ DB LOAD ERROR:", err.message);
+    DB = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
+    console.log("✅ DB LOADED");
+  } catch (e) {
+    console.error("❌ DB ERROR:", e.message);
     DB = { categories: [] };
   }
 }
 
-// ===============================
-// PRICE SEARCH ENGINE
-// ===============================
-function getPrice(text = "") {
-  if (!DB || !DB.categories) return null;
+// =====================
+// SMART NORMALIZER
+// =====================
+function normalize(text = "") {
+  return text
+    .toLowerCase()
+    .replace(/g/g, "") // 250g -> 250
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  const msg = text.toLowerCase();
+// =====================
+// PRICE FINDER (SMART)
+// =====================
+function getPrice(text = "") {
+  if (!DB) return null;
+
+  const msg = normalize(text);
 
   for (const cat of DB.categories) {
     for (const item of cat.items) {
-      const name = item.name.toLowerCase();
+      const itemName = normalize(item.name);
 
-      if (msg.includes(name)) {
-        const sizeKeys = Object.keys(item.sizes);
-        const size = sizeKeys[0];
+      // fuzzy match (important fix)
+      if (
+        msg.includes(itemName.split(" ")[0]) ||
+        itemName.split(" ")[0].includes(msg.split(" ")[0])
+      ) {
+        const sizeKey = Object.keys(item.sizes)[0];
+        const side = msg.includes("2") ? "2" : "1";
 
-        const side = msg.includes("2 side") ? "2" : "1";
-        const price = item.sizes[size]?.[side];
+        const price = item.sizes[sizeKey]?.[side];
 
-        if (!price) return `❌ Price မတွေ့ပါ`;
-
-        return `📄 ${item.name}\n\n${size}:\n${side} Side: ${price} Ks`;
+        if (price) {
+          return `📄 ${item.name}\n\n${sizeKey}:\n${side} Side: ${price} Ks`;
+        }
       }
     }
   }
