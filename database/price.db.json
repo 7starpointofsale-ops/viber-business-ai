@@ -11,188 +11,32 @@
           }
         },
         {
-          "name": "Art Paper 148g",
-          "sizes": {
-            "A4": { "1": 1600, "2": 2300 },
-            "13x19": { "1": 4300, "2": 5500 }
-          }
-        },
-        {
-          "name": "Art Card 210g",
-          "sizes": {
-            "A4": { "1": 1900, "2": 2500 },
-            "13x19": { "1": 4800, "2": 6000 }
-          }
-        },
-        {
           "name": "Art Card 250g",
           "sizes": {
             "A4": { "1": 2200, "2": 2800 },
             "13x19": { "1": 5300, "2": 6500 }
           }
-        },
-        {
-          "name": "Art Card 300g",
-          "sizes": {
-            "A4": { "1": 2700, "2": 3800 },
-            "13x19": { "1": 5800, "2": 7500 }
-          }
         }
       ]
     },
-
-    {
-      "name": "Business Card",
-      "items": [
-        {
-          "name": "Art Card 250g",
-          "sizes": {
-            "A4": { "1": 15000, "2": 22000 }
-          }
-        },
-        {
-          "name": "Art Card 250g + Lamination",
-          "sizes": {
-            "A4": { "1": 18000, "2": 26000 }
-          }
-        }
-      ]
-    },
-
     {
       "name": "PVC Card",
       "items": [
         {
-          "name": "PVC Card Inject",
+          "name": "PVC Card",
           "sizes": {
             "Standard": { "1": 5000, "2": 6000 }
-          }
-        },
-        {
-          "name": "PVC UV Thick",
-          "sizes": {
-            "Standard": { "1": 5000, "2": 6000 }
-          }
-        },
-        {
-          "name": "PVC UV Thin",
-          "sizes": {
-            "Standard": { "1": 3500, "2": 4500 }
           }
         }
       ]
     },
-
     {
       "name": "Vinyl",
       "items": [
         {
           "name": "ECO",
           "sizes": {
-            "1 sqft": { "1": 1800, "2": 1900 },
-            ">6 sqft": { "1": 1900, "2": 2000 }
-          }
-        },
-        {
-          "name": "UV",
-          "sizes": {
-            "1 sqft": { "1": 3600, "2": 3600 }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Stand",
-      "items": [
-        {
-          "name": "X Stand",
-          "sizes": {
-            "2x5": { "1": 70000 }
-          }
-        },
-        {
-          "name": "Roll Up Stand",
-          "sizes": {
-            "Standard": { "1": 400000 }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Sticker",
-      "items": [
-        {
-          "name": "UV Sticker",
-          "sizes": {
-            "per set": { "1": 4500 }
-          }
-        },
-        {
-          "name": "Art Paper Sticker",
-          "sizes": {
-            "single": { "1": 3500 }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Board",
-      "items": [
-        {
-          "name": "PP Board",
-          "sizes": {
-            "Standard": { "1": 6000 }
-          }
-        },
-        {
-          "name": "All in One Board",
-          "sizes": {
-            "Standard": { "1": 7000 }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Print Color",
-      "items": [
-        {
-          "name": "A4",
-          "sizes": {
-            "A4": { "1": 800, "2": 1500 }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Print BW",
-      "items": [
-        {
-          "name": "A4",
-          "sizes": {
-            "A4": { "1": 150, "2": 200 }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Photo Print",
-      "items": [
-        {
-          "name": "4x6",
-          "sizes": {
-            "4x6": { "1": 1000 }
-          }
-        },
-        {
-          "name": "A4 Photo",
-          "sizes": {
-            "A4": { "1": 2000, "2": 2500 }
+            "1 sqft": { "1": 1800, "2": 1900 }
           }
         }
       ]
