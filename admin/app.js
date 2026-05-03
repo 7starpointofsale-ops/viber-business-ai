@@ -1,70 +1,90 @@
-function toggle() {
-  const t = document.getElementById("type").value;
+function toggleMode() {
+  const type = document.getElementById("type").value;
 
-  document.getElementById("sizeBox").style.display =
-    (t === "normal" || t === "mixed") ? "block" : "none";
+  document.getElementById("tableMode").style.display =
+    type === "table" ? "block" : "none";
 
-  document.getElementById("qtyBox").style.display =
-    (t === "fixed" || t === "mixed") ? "block" : "none";
+  document.getElementById("fixedMode").style.display =
+    type === "fixed" ? "block" : "none";
 }
 
-async function save() {
-  await fetch("/api/add-item", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      category: category.value,
-      item: item.value,
-      type: type.value,
-      size: size.value,
-      side1: side1.value,
-      side2: side2.value,
-      qty: qty.value,
-      price: price.value
-    })
-  });
-
-  load();
-}
-
-async function load() {
+// ===================== LOAD
+async function loadData() {
   const res = await fetch("/api/prices");
   const data = await res.json();
 
-  const tb = document.getElementById("tb");
-  tb.innerHTML = "";
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
 
   data.categories.forEach(cat => {
     cat.items.forEach(item => {
 
-      Object.keys(item.prices).forEach(k => {
-        const v = item.prices[k];
+      const sizes = item.sizes;
 
-        if (typeof v === "object") {
-          tb.innerHTML += `
-            <tr>
-              <td>${cat.name}</td>
-              <td>${item.name}</td>
-              <td>${k}</td>
-              <td>${v["1"]}</td>
-              <td>${v["2"] || "-"}</td>
-            </tr>
-          `;
-        } else {
-          tb.innerHTML += `
-            <tr>
-              <td>${cat.name}</td>
-              <td>${item.name}</td>
-              <td>${k}</td>
-              <td>${v}</td>
-              <td>-</td>
-            </tr>
-          `;
-        }
+      Object.keys(sizes).forEach(size => {
+        const val = sizes[size];
+
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+          <td>${cat.name}</td>
+          <td>${item.name}</td>
+          <td>${size}</td>
+          <td>${val["1"] ?? "-"}</td>
+          <td>${val["2"] ?? "-"}</td>
+          <td>
+            <button class="delete" onclick="deleteItem('${cat.name}','${item.name}','${size}')">
+              X
+            </button>
+          </td>
+        `;
+
+        tbody.appendChild(row);
       });
-
     });
   });
 }
 
-load();
+// ===================== ADD (FIXED + TABLE BOTH SUPPORT)
+async function addItem() {
+  const type = document.getElementById("type").value;
+
+  let body = {
+    category: document.getElementById("category").value,
+    item: document.getElementById("item").value,
+    type
+  };
+
+  if (type === "table") {
+    body.size = document.getElementById("size").value;
+    body.side1 = document.getElementById("side1").value;
+    body.side2 = document.getElementById("side2").value;
+  }
+
+  if (type === "fixed") {
+    body.fixedValue = document.getElementById("fixedValue").value;
+    body.fixedPrice = document.getElementById("fixedPrice").value;
+  }
+
+  await fetch("/api/add-item", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  alert("Saved ✅");
+  loadData();
+}
+
+// ===================== DELETE
+async function deleteItem(category, item, size) {
+  await fetch("/api/delete-item", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category, item, size })
+  });
+
+  loadData();
+}
+
+loadData();
