@@ -4,12 +4,12 @@ const TOKEN = process.env.VIBER_TOKEN;
 
 async function sendMessage(receiver, text) {
   try {
-    const response = await axios.post(
+    const res = await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
-        receiver: receiver,
+        receiver,
         type: "text",
-        text: text
+        text
       },
       {
         headers: {
@@ -19,9 +19,9 @@ async function sendMessage(receiver, text) {
       }
     );
 
-    return response.data;
+    return res.data;
   } catch (err) {
-    console.log("❌ Viber send error:", err.message);
+    console.log("❌ Viber Error:", err.message);
   }
 }
 
