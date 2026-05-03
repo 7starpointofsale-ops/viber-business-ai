@@ -1,12 +1,16 @@
 const fs = require("fs");
 const path = require("path");
 
-// 🔥 FIX: correct path (Render + local safe)
+// ----------------------
+// DB PATH FIX (Render safe)
+// ----------------------
 const dbPath =
   process.env.PRICE_DB_PATH ||
   path.join(__dirname, "../database/price.db.json");
 
-// load db safely
+// ----------------------
+// LOAD DB SAFE
+// ----------------------
 let db = { categories: [] };
 
 try {
@@ -16,50 +20,35 @@ try {
   console.error("❌ PRICE DB LOAD ERROR:", err.message);
 }
 
-// ------------------------------
-// CLEAN INPUT
-// ------------------------------
+// ----------------------
+// NORMALIZE TEXT
+// ----------------------
 function normalize(text = "") {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\u1000-\u109f\s\+\-]/gi, " ") // remove junk but keep Myanmar
+    .replace(/[^a-z0-9\u1000-\u109f\s]/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-// ------------------------------
+// ----------------------
 // VALID INPUT CHECK
-// ------------------------------
-function isValidInput(text) {
+// ----------------------
+function isValid(text) {
   if (!text) return false;
 
-  // reject pure math / junk
+  // reject junk like 12345 / 5+10 / abc only
+  if (/^\d+$/.test(text)) return false;
   if (/^\d+(\+\d+)+$/.test(text)) return false;
-  if (/^[a-z0-9]{1,2}$/i.test(text)) return false;
+  if (text.length < 2) return false;
 
   return true;
 }
 
-// ------------------------------
-// STRICT MATCH SCORE
-// ------------------------------
-function scoreMatch(query, itemName) {
-  const qWords = query.split(" ");
-  const iWords = itemName.split(" ");
-
-  let score = 0;
-
-  qWords.forEach((q) => {
-    if (iWords.includes(q)) score++;
-  });
-
-  return score;
-}
-
-// ------------------------------
-// FIND ITEM
-// ------------------------------
-function findBestMatch(query) {
+// ----------------------
+// MATCH FUNCTION
+// ----------------------
+function findMatch(query) {
   const q = normalize(query);
 
   let best = null;
@@ -69,7 +58,14 @@ function findBestMatch(query) {
     for (const item of cat.items || []) {
       const itemName = normalize(item.name);
 
-      const score = scoreMatch(q, itemName);
+      let score = 0;
+
+      const qWords = q.split(" ");
+      const iWords = itemName.split(" ");
+
+      qWords.forEach(w => {
+        if (iWords.includes(w)) score++;
+      });
 
       if (score > bestScore) {
         bestScore = score;
@@ -78,45 +74,39 @@ function findBestMatch(query) {
     }
   }
 
-  // 🔥 STRICT THRESHOLD (important)
-  if (bestScore < 2) return null;
+  // 🔥 STRICT RULE (avoid wrong fallback like A4)
+  if (!best || bestScore < 2) return null;
 
   return best;
 }
 
-// ------------------------------
-// MAIN ENGINE
-// ------------------------------
+// ----------------------
+// MAIN EXPORT
+// ----------------------
 module.exports = function priceEngine(message = "") {
-  const text = message.trim();
+  const input = message.trim();
 
   // ❌ invalid input
-  if (!isValidInput(text)) {
+  if (!isValid(input)) {
     return "❌ မတွေ့ပါ";
   }
 
-  const found = findBestMatch(text);
+  const match = findMatch(input);
 
-  if (!found) {
+  // ❌ no match
+  if (!match) {
     return "❌ မတွေ့ပါ";
   }
 
-  const { cat, item } = found;
+  const { item } = match;
 
-  // extract size if exists
-  let sizeBlock = "";
+  let output = `📄 ${item.name}\n\n`;
 
   if (item.sizes) {
-    Object.entries(item.sizes).forEach(([size, price]) => {
-      sizeBlock += `
-${size}:
-1 Side: ${price["1"] || "-"} Ks
-2 Side: ${price["2"] || "-"} Ks
-`;
-    });
+    for (const [size, price] of Object.entries(item.sizes)) {
+      output += `${size}:\n1 Side: ${price["1"] || "-"} Ks\n2 Side: ${price["2"] || "-"} Ks\n\n`;
+    }
   }
 
-  return `📄 ${item.name}
-
-${sizeBlock}`;
+  return output.trim();
 };
