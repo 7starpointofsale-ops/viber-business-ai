@@ -1,71 +1,35 @@
 const express = require("express");
 const path = require("path");
-const fs = require("fs");
 
 const app = express();
 
-// =======================
-// 🔥 MIDDLEWARE
-// =======================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // =======================
-// 📁 STATIC FILES
+// 🤖 BOT CONTROLLER
 // =======================
+const botController = require("./controllers/bot.controller");
 
-// Admin panel
+// =======================
+// 🔥 VIBER WEBHOOK ROUTE (IMPORTANT)
+// =======================
+app.post("/webhook", botController.handleMessage);
+
+// =======================
+// 📁 ADMIN PANEL
+// =======================
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
-// Optional: public folder (if you have frontend)
-app.use(express.static(path.join(__dirname, "../public")));
-
 // =======================
-// 📦 PRICE DB SAFE LOADER (GLOBAL CHECK)
-// =======================
-function loadPriceDB() {
-  try {
-    const filePath = path.join(__dirname, "../price.db.json");
-
-    if (!fs.existsSync(filePath)) {
-      console.log("❌ price.db.json NOT FOUND at root");
-      return { categories: [] };
-    }
-
-    const raw = fs.readFileSync(filePath, "utf-8");
-    const json = JSON.parse(raw);
-
-    if (!Array.isArray(json.categories)) {
-      console.log("❌ categories invalid format");
-      return { categories: [] };
-    }
-
-    return json;
-  } catch (err) {
-    console.log("❌ PRICE DB LOAD ERROR:", err.message);
-    return { categories: [] };
-  }
-}
-
-// =======================
-// 📡 API ROUTES
-// =======================
-
-// GET PRICE DATA
-app.get("/api/prices", (req, res) => {
-  const db = loadPriceDB();
-  res.json(db);
-});
-
-// =======================
-// 🧪 SIMPLE HEALTH CHECK
+// 🧪 TEST ROUTE
 // =======================
 app.get("/", (req, res) => {
-  res.send("🚀 Viber Business AI Bot Running...");
+  res.send("🚀 Viber Bot Running...");
 });
 
 // =======================
-// 🚀 START SERVER (Render Safe)
+// 🚀 START SERVER
 // =======================
 const PORT = process.env.PORT || 10000;
 

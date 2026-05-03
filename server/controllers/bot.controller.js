@@ -1,8 +1,5 @@
 const priceEngine = require("../services/price.engine");
 
-// =======================
-// 🤖 MAIN BOT HANDLER
-// =======================
 exports.handleMessage = async (req, res) => {
   try {
     const message = req.body?.message?.text || req.body?.text || "";
@@ -10,28 +7,19 @@ exports.handleMessage = async (req, res) => {
     console.log("📩 Incoming:", message);
 
     if (!message) {
-      return res.json({
-        reply: "❌ Empty message"
-      });
+      return res.json({ reply: "❌ Empty message" });
     }
 
-    // =======================
-    // 🔥 PRICE ENGINE CHECK
-    // =======================
+    // 🔥 PRICE ENGINE
     const priceReply = priceEngine(message);
-
     if (priceReply) {
-      return res.json({
-        reply: priceReply
-      });
+      return res.json({ reply: priceReply });
     }
 
-    // =======================
-    // 💬 DEFAULT RESPONSES
-    // =======================
+    // 💬 BASIC RESPONSES
     const text = message.toLowerCase();
 
-    if (text.includes("hi") || text.includes("hello")) {
+    if (text.includes("hi")) {
       return res.json({
         reply: "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်"
       });
@@ -40,28 +28,16 @@ exports.handleMessage = async (req, res) => {
     if (text.includes("order")) {
       return res.json({
         reply:
-          "📦 Order လုပ်ရန်:\n" +
-          "1️⃣ Item name\n" +
-          "2️⃣ Size\n" +
-          "3️⃣ Quantity\n" +
-          "4️⃣ Phone number ပို့ပေးပါ"
+          "📦 Order:\n1️⃣ Item\n2️⃣ Size\n3️⃣ Qty\n4️⃣ Phone"
       });
     }
 
-    if (text.includes("price") || text.includes("ဈေး")) {
-      return res.json({
-        reply: "📌 Item name သို့မဟုတ် product name ရိုက်ပေးပါ"
-      });
-    }
-
-    // =======================
-    // ❌ FALLBACK
-    // =======================
     return res.json({
-      reply: "❌ မတွေ့ပါ\n📌 ထပ်မေးပေးပါ"
+      reply: "❌ မတွေ့ပါ"
     });
+
   } catch (err) {
-    console.log("❌ BOT ERROR:", err.message);
+    console.log("❌ ERROR:", err.message);
 
     return res.json({
       reply: "⚠️ System Error"
