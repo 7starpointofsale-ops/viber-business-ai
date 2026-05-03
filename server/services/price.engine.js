@@ -1,10 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 
-// ✅ FIXED PATH (IMPORTANT)
+// ✅ FIXED PATH (ONLY ONE)
 const dbPath = path.join(__dirname, "../../database/price.db.json");
 
-// load db safely
 function loadDB() {
   try {
     if (!fs.existsSync(dbPath)) {
@@ -12,48 +11,58 @@ function loadDB() {
       return { categories: [] };
     }
 
-    const raw = fs.readFileSync(dbPath, "utf-8");
-    return JSON.parse(raw);
+    return JSON.parse(fs.readFileSync(dbPath, "utf-8"));
   } catch (err) {
-    console.error("❌ PRICE DB LOAD ERROR:", err);
+    console.error("❌ DB ERROR:", err);
     return { categories: [] };
   }
 }
 
 // normalize text
-function norm(text) {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[^a-z0-9\u1000-\u109f+]/gi, "")
-    .trim();
+function norm(t) {
+  return t.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-// main engine
-module.exports = function (msg) {
-  const db = loadDB();
+// math engine
+function isMath(text) {
+  return /^[0-9+\-*/().\s]+$/.test(text);
+}
 
+function calc(text) {
+  try {
+    return eval(text);
+  } catch {
+    return null;
+  }
+}
+
+module.exports = function (msg) {
   const input = norm(msg);
+
+  // 🧮 math first
+  if (isMath(input)) {
+    const result = calc(input);
+    if (result !== null) return `🧮 Result: ${result}`;
+  }
+
+  const db = loadDB();
 
   for (const cat of db.categories || []) {
     for (const item of cat.items || []) {
       const itemName = norm(item.name);
 
       if (input.includes(itemName)) {
-        let result = `📄 ${item.name}\n\n`;
+        let out = `📄 ${item.name}\n\n`;
 
         for (const size in item.sizes) {
-          const price = item.sizes[size];
-
-          result += `${size}:\n`;
-
-          if (price["1"]) result += `1 Side: ${price["1"]} Ks\n`;
-          if (price["2"]) result += `2 Side: ${price["2"]} Ks\n`;
-
-          result += `\n`;
+          const p = item.sizes[size];
+          out += `${size}:\n`;
+          if (p["1"]) out += `1 Side: ${p["1"]} Ks\n`;
+          if (p["2"]) out += `2 Side: ${p["2"]} Ks\n`;
+          out += `\n`;
         }
 
-        return result;
+        return out;
       }
     }
   }
