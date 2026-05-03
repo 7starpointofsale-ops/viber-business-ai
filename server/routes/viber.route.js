@@ -1,7 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const botController = require("../controllers/bot.controller");
 
-router.post("/", botController.handleMessage);
+router.post("/", (req, res) => {
+  console.log("Viber message:", req.body);
+  res.sendStatus(200);
+});
 
 module.exports = router;

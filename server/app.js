@@ -2,15 +2,19 @@ const express = require("express");
 const bodyParser = require("body-parser");
 require("dotenv").config();
 
-const viberRoute = require("./routes/viber.route");
-
 const app = express();
 app.use(bodyParser.json());
 
-app.use("/webhook", viberRoute);
-
+// test route
 app.get("/", (req, res) => {
-  res.send("🚀 Viber Business AI Running...");
+  res.send("🚀 Viber Business AI is running");
+});
+
+// webhook route
+app.post("/webhook", (req, res) => {
+  console.log("📩 Message received:", req.body);
+
+  res.sendStatus(200);
 });
 
 const PORT = process.env.PORT || 3000;
