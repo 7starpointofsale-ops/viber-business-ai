@@ -1,108 +1,121 @@
-const fs = require("fs");
-const path = require("path");
+const express = require("express");
+const bodyParser = require("body-parser");
+const axios = require("axios");
 
-const dbPath = path.join(__dirname, "../database/price.db.json");
+const { loadDB, getPrice } = require("./services/price.engine");
 
-let priceDB = null;
+const app = express();
 
-// ---------- LOAD DB ----------
-function loadDB() {
+// middleware
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// ===============================
+// LOAD DATABASE ON START
+// ===============================
+loadDB();
+
+// ===============================
+// HEALTH CHECK
+// ===============================
+app.get("/", (req, res) => {
+  res.send("🚀 Viber Business AI is running");
+});
+
+// ===============================
+// VIBER WEBHOOK
+// ===============================
+app.post("/webhook", async (req, res) => {
   try {
-    const raw = fs.readFileSync(dbPath, "utf-8");
-    priceDB = JSON.parse(raw);
-    console.log("✅ PRICE DB LOADED");
+    const event = req.body;
+
+    console.log("📩 Incoming:", JSON.stringify(event, null, 2));
+
+    if (!event || !event.event) {
+      return res.sendStatus(200);
+    }
+
+    // MESSAGE EVENT
+    if (event.event === "message") {
+      const message = event.message.text;
+      const senderId = event.sender.id;
+
+      let reply = handleMessage(message);
+
+      await sendMessage(senderId, reply);
+    }
+
+    res.sendStatus(200);
   } catch (err) {
-    console.error("❌ PRICE DB ERROR:", err.message);
-    priceDB = null;
+    console.error("❌ WEBHOOK ERROR:", err.message);
+    res.sendStatus(200);
   }
-}
+});
 
-// ---------- NORMALIZE ----------
-function normalize(t = "") {
-  return t
-    .toLowerCase()
-    .replace(/[^a-z0-9\u1000-\u109f\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// ===============================
+// MESSAGE HANDLER
+// ===============================
+function handleMessage(text = "") {
+  const msg = text.toLowerCase().trim();
 
-// ---------- SMART FIND (FIXED) ----------
-function findBest(input) {
-  if (!priceDB) return null;
+  console.log("🤖 Processing:", msg);
 
-  const q = normalize(input);
+  // greeting
+  if (msg === "hi" || msg === "hello" || msg === "မင်္ဂလာပါ") {
+    return "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
+  }
 
-  let best = null;
-
-  for (const cat of priceDB.categories) {
-    for (const item of cat.items) {
-      const name = normalize(item.name);
-
-      // 🔥 STRONG MATCH
-      if (q.includes(name)) {
-        return { cat, item };
-      }
-
-      // 🔥 PARTIAL SCORE MATCH
-      const words = name.split(" ");
-      let score = 0;
-
-      for (const w of words) {
-        if (q.includes(w)) score++;
-      }
-
-      if (!best || score > best.score) {
-        best = { cat, item, score };
-      }
+  // math support
+  if (msg.includes("+") || msg.includes("-") || msg.includes("*") || msg.includes("/")) {
+    try {
+      const result = eval(msg.replace(/[^0-9+\-*/(). ]/g, ""));
+      return `🧮 Result: ${result}`;
+    } catch {
+      return "❌ Invalid math";
     }
   }
 
-  if (best && best.score >= 1) {
-    return best;
-  }
+  // price engine
+  const price = getPrice(text);
+  if (price) return price;
 
-  return null;
+  return "❌ Item မတွေ့ပါ";
 }
 
-// ---------- MAIN CALCULATE ----------
-function calculate(input) {
-  const match = findBest(input);
-
-  if (!match) {
-    return "❌ မတွေ့ပါ";
+// ===============================
+// SEND MESSAGE TO VIBER
+// ===============================
+async function sendMessage(receiver, text) {
+  try {
+    await axios.post(
+      "https://chatapi.viber.com/pa/send_message",
+      {
+        receiver: receiver,
+        min_api_version: 1,
+        sender: {
+          name: "7 Star Sayar Gyi",
+          avatar: ""
+        },
+        type: "text",
+        text: text
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+        }
+      }
+    );
+  } catch (err) {
+    console.error("❌ SEND ERROR:", err.response?.data || err.message);
   }
-
-  const { item } = match;
-  const q = normalize(input);
-
-  // size detect
-  const sizes = Object.keys(item.sizes);
-
-  let selectedSize = sizes.find(s => q.includes(normalize(s)));
-
-  if (!selectedSize) selectedSize = sizes[0];
-
-  const sizeData = item.sizes[selectedSize];
-
-  if (!sizeData) {
-    return `❌ Size မတွေ့ပါ (${item.name})`;
-  }
-
-  // side detect
-  let side = "1";
-
-  if (q.includes("2 side")) side = "2";
-  if (q.includes("1 side")) side = "1";
-
-  const price = sizeData[side] || sizeData["1"];
-
-  return `📄 ${item.name}
-
-${selectedSize}
-${side} Side: ${price} Ks`;
 }
 
-module.exports = {
-  loadDB,
-  calculate
-};
+// ===============================
+// START SERVER
+// ===============================
+const PORT = process.env.PORT || 10000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
