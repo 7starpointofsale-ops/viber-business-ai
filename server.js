@@ -4,13 +4,13 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
-// ===== ENV =====
+// ================= TOKEN =================
 const TOKEN = process.env.VIBER_TOKEN;
 
-// ===== STATE =====
+// ================= USER STATE =================
 const userState = {};
 
-// ===== PRICE TABLE =====
+// ================= PRICE TABLE =================
 const priceTable = {
   "art paper 128g": { "1": 1400, "2": 2100, lamination: 1000 },
   "art paper 148g": { "1": 1600, "2": 2300, lamination: 1000 },
@@ -30,76 +30,122 @@ const priceTable = {
   "tree emboss 250g": { "1": 3200, "2": 4300, lamination: 1000 },
   "sand card 250g": { "1": 3200, "2": 4300, lamination: 1000 },
   "england card 300g": { "1": 3200, "2": 4300, lamination: 1000 },
-  "japan spot 250g": { "1": 3200, "2": 4300, lamination: 1000 }
+  "japan spot 250g": { "1": 3200, "2": 4300, lamination: 1000 },
+
+  "vle-aq 250g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "vle-ca 250g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "vle-ch 250g": { "1": 3200, "2": 4300, lamination: 1000 },
+  "vle-hx 250g": { "1": 3200, "2": 4300, lamination: 1000 }
 };
 
-// ===== SEND MESSAGE =====
+// ================= NORMALIZE =================
+function normalize(text) {
+  return text
+    .toLowerCase()
+    .replace(/၁/g, "1")
+    .replace(/၂/g, "2")
+    .replace(/၃/g, "3")
+    .replace(/၄/g, "4")
+    .replace(/၅/g, "5")
+    .replace(/၆/g, "6")
+    .replace(/၇/g, "7")
+    .replace(/၈/g, "8")
+    .replace(/၉/g, "9")
+    .trim();
+}
+
+// ================= MATERIAL MATCH =================
+function findMaterial(input) {
+  const text = normalize(input);
+
+  const keys = Object.keys(priceTable);
+
+  return (
+    keys.find(k => text.includes(k)) ||
+    keys.find(k => k.includes(text)) ||
+    text
+  );
+}
+
+// ================= SEND MESSAGE =================
 function sendMessage(receiver, text) {
   return axios.post(
     "https://chatapi.viber.com/pa/send_message",
     {
       receiver,
       type: "text",
-      text,
+      text
     },
     {
       headers: {
         "X-Viber-Auth-Token": TOKEN,
-        "Content-Type": "application/json",
-      },
+        "Content-Type": "application/json"
+      }
     }
   );
 }
 
-// ===== WEBHOOK =====
+// ================= WEBHOOK =================
 app.post("/webhook", async (req, res) => {
   const event = req.body;
-
   if (!event || !event.sender) return res.sendStatus(200);
 
   const userId = String(event.sender.id);
-  const text = (event.message?.text || "").trim().toLowerCase();
+  const text = normalize(event.message?.text || "");
 
-  if (!userState[userId]) userState[userId] = { step: 0 };
+  if (!userState[userId]) {
+    userState[userId] = { step: 0 };
+  }
 
-  // hi
+  // ================= RESET =================
   if (text === "hi") {
-    userState[userId].step = 1;
-    await sendMessage(userId,
-      "🤖 Hello 👋 ကျွန်တော်က ကိုညီရဲ့တပည့်ပါ၊ ဆရာကြီးလို့ခေါ်ပါတယ်။"
+    userState[userId] = { step: 1 };
+
+    await sendMessage(
+      userId,
+      "🤖 Hello 👋\nကျွန်တော်က ကိုညီရဲ့တပည့်ပါ၊ ဆရာကြီးလို့ခေါ်ပါတယ်။"
     );
+
     return res.sendStatus(200);
   }
 
-  // price start
+  // ================= START PRICE =================
   if (text.includes("ဈေး")) {
     userState[userId].step = 2;
-    await sendMessage(userId, "📦 Material ရိုက်ပါ (example: Art Paper 128g)");
+
+    await sendMessage(
+      userId,
+      "📦 Material ရိုက်ပါ (Art Paper / Art Card / White Card)"
+    );
+
     return res.sendStatus(200);
   }
 
-  // STEP 2 material
+  // ================= STEP 2 MATERIAL =================
   if (userState[userId].step === 2) {
-    userState[userId].material = text;
+    userState[userId].material = findMaterial(text);
     userState[userId].step = 3;
+
     await sendMessage(userId, "🔢 Quantity ဘယ်လောက်လဲ?");
     return res.sendStatus(200);
   }
 
-  // STEP 3 qty
+  // ================= STEP 3 QTY =================
   if (userState[userId].step === 3) {
-    userState[userId].qty = text;
+    const qty = parseInt(text.replace(/[^\d]/g, "")) || 1;
 
     const material = userState[userId].material;
-    const qty = parseInt(text);
-
     const unitPrice = priceTable[material]?.["1"] || 1000;
 
     const total = unitPrice * qty;
 
     await sendMessage(
       userId,
-      `🧾 Order Summary\nMaterial: ${material}\nQty: ${qty}\nUnit: ${unitPrice}\n💰 Total: ${total} MMK`
+      `🧾 Order Summary\n` +
+      `Material: ${material}\n` +
+      `Qty: ${qty}\n` +
+      `Unit Price: ${unitPrice}\n` +
+      `💰 Total: ${total} MMK`
     );
 
     userState[userId] = { step: 0 };
@@ -109,16 +155,16 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// ===== ROOT =====
+// ================= ROOT =================
 app.get("/", (req, res) => {
-  res.send("BOT RUNNING");
+  res.send("🚀 VIBER POS BOT V3 RUNNING");
 });
 
-// ===== START =====
+// ================= START =================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("🚀 BOT STARTED");
-  console.log("🚀 RUNNING ON PORT", PORT);
+  console.log("PORT:", PORT);
   console.log("TOKEN OK:", !!TOKEN);
 });
