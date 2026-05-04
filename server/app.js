@@ -1,13 +1,77 @@
-function normalize(text = "") {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+const express = require("express");
+const path = require("path");
+const fs = require("fs");
+const axios = require("axios");
+
+const app = express();
+app.use(express.json());
+
+// ===================== PATH =====================
+const DB_PATH = path.join(__dirname, "../database/price.db.json");
+
+// ===================== ADMIN =====================
+app.use("/admin", express.static(path.join(__dirname, "../admin")));
+
+// ===================== LOAD DB =====================
+function loadDB() {
+  try {
+    return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  } catch (err) {
+    console.error("❌ DB LOAD ERROR:", err.message);
+    return { categories: [] };
+  }
 }
 
+function saveDB(db) {
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+}
+
+// ===================== API =====================
+app.get("/api/prices", (req, res) => {
+  res.json(loadDB());
+});
+
+app.post("/api/add-item", (req, res) => {
+  const db = loadDB();
+  const { category, item, size, side1, side2 } = req.body;
+
+  let cat = db.categories.find(c => c.name === category);
+  if (!cat) {
+    cat = { name: category, items: [] };
+    db.categories.push(cat);
+  }
+
+  let it = cat.items.find(i => i.name === item);
+  if (!it) {
+    it = { name: item, sizes: {} };
+    cat.items.push(it);
+  }
+
+  it.sizes[size] = {
+    "1": Number(side1 || 0),
+    "2": Number(side2 || 0)
+  };
+
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.post("/api/delete-item", (req, res) => {
+  const db = loadDB();
+  const { category, item } = req.body;
+
+  const cat = db.categories.find(c => c.name === category);
+  if (cat) {
+    cat.items = cat.items.filter(i => i.name !== item);
+  }
+
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// ===================== BOT LOGIC =====================
 function handleMessage(text = "") {
-  const msg = normalize(text);
+  const msg = text.toLowerCase();
 
   if (msg === "hi" || msg === "hello" || msg === "မင်္ဂလာပါ") {
     return "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
@@ -15,52 +79,73 @@ function handleMessage(text = "") {
 
   const db = loadDB();
 
-  let bestMatch = null;
-
   for (const cat of db.categories) {
     for (const item of cat.items) {
 
-      const itemName = normalize(item.name);
+      if (msg.includes(item.name.toLowerCase())) {
 
-      // 🔥 fuzzy match (important)
-      if (msg.includes(itemName) || itemName.includes(msg)) {
-        bestMatch = item;
-        break;
-      }
+        let reply = `📄 ${item.name}\n\n`;
 
-      // 🔥 keyword split match
-      const words = itemName.split(" ");
-      let score = 0;
+        for (const size in item.sizes) {
+          const val = item.sizes[size];
 
-      words.forEach(w => {
-        if (msg.includes(w)) score++;
-      });
+          reply += `${size}:\n`;
 
-      if (score >= 2) { // threshold
-        bestMatch = item;
-        break;
+          if (val["1"]) reply += `1 Side: ${val["1"]} Ks\n`;
+          if (val["2"]) reply += `2 Side: ${val["2"]} Ks\n`;
+
+          reply += "\n";
+        }
+
+        return reply;
       }
     }
   }
 
-  if (!bestMatch) {
-    return "❌ Item မတွေ့ပါ";
-  }
-
-  let reply = `📄 ${bestMatch.name}\n\n`;
-
-  for (const key in bestMatch.prices) {
-    const val = bestMatch.prices[key];
-
-    if (typeof val === "object") {
-      reply += `${key}:\n`;
-      if (val["1"]) reply += `1 Side: ${val["1"]} Ks\n`;
-      if (val["2"]) reply += `2 Side: ${val["2"]} Ks\n`;
-      reply += "\n";
-    } else {
-      reply += `${key}: ${val} Ks\n`;
-    }
-  }
-
-  return reply;
+  return "❌ Item မတွေ့ပါ";
 }
+
+// ===================== VIBER WEBHOOK =====================
+app.post("/webhook", async (req, res) => {
+  try {
+    const event = req.body;
+
+    if (event.event === "message") {
+      const text = event.message.text;
+      const sender = event.sender.id;
+
+      const reply = handleMessage(text);
+
+      await axios.post(
+        "https://chatapi.viber.com/pa/send_message",
+        {
+          receiver: sender,
+          type: "text",
+          text: reply,
+          sender: { name: "7 Star Sayar Gyi" }
+        },
+        {
+          headers: {
+            "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+          }
+        }
+      );
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("❌ WEBHOOK ERROR:", err.message);
+    res.sendStatus(200);
+  }
+});
+
+// ===================== ROOT =====================
+app.get("/", (req, res) => {
+  res.send("🚀 Viber AI Running");
+});
+
+// ===================== START =====================
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log("🚀 Server running on " + PORT);
+});

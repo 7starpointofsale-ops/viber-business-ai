@@ -5,7 +5,7 @@
       "items": [
         {
           "name": "Art Paper 128g",
-          "type": "normal",
+          "type": "table",
           "prices": {
             "A4": { "1": 1400, "2": 2100 },
             "13x19": { "1": 3800, "2": 5000 }
@@ -13,7 +13,7 @@
         },
         {
           "name": "Art Card 250g",
-          "type": "normal",
+          "type": "table",
           "prices": {
             "A4": { "1": 2200, "2": 2800 },
             "13x19": { "1": 5300, "2": 6500 }
@@ -21,49 +21,26 @@
         }
       ]
     },
-
     {
       "name": "PVC Card",
       "items": [
         {
           "name": "PVC Card",
-          "type": "normal",
+          "type": "table",
           "prices": {
             "Standard": { "1": 5000, "2": 6000 }
           }
         }
       ]
     },
-
     {
       "name": "Vinyl",
       "items": [
         {
           "name": "ECO",
-          "type": "normal",
+          "type": "table",
           "prices": {
             "1 sqft": { "1": 1800, "2": 1900 }
-          }
-        }
-      ]
-    },
-
-    {
-      "name": "Bond / Contract",
-      "items": [
-        {
-          "name": "Stamp / Contract",
-          "type": "mixed",
-          "prices": {
-            "A4": { "1": 1000, "2": 1500 },
-            "100": 3000,
-            "200": 3000,
-            "250": 3000,
-            "300": 3500,
-            "400": 3500,
-            "500": 3500,
-            "600": 4000,
-            "1000": 4000
           }
         }
       ]
