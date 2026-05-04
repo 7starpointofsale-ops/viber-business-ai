@@ -1,23 +1,20 @@
 const express = require("express");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
 const axios = require("axios");
 
 const app = express();
 app.use(express.json());
 
-// ===================== PATH =====================
+// ================= PATH FIX =================
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
-// ===================== ADMIN =====================
-app.use("/admin", express.static(path.join(__dirname, "../admin")));
-
-// ===================== LOAD DB =====================
+// ================= SAFE LOAD =================
 function loadDB() {
   try {
     return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
   } catch (err) {
-    console.error("❌ DB LOAD ERROR:", err.message);
+    console.error("DB ERROR:", err.message);
     return { categories: [] };
   }
 }
@@ -26,7 +23,10 @@ function saveDB(db) {
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
-// ===================== API =====================
+// ================= ADMIN =================
+app.use("/admin", express.static(path.join(__dirname, "../admin")));
+
+// ================= API =================
 app.get("/api/prices", (req, res) => {
   res.json(loadDB());
 });
@@ -56,45 +56,23 @@ app.post("/api/add-item", (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/delete-item", (req, res) => {
-  const db = loadDB();
-  const { category, item } = req.body;
-
-  const cat = db.categories.find(c => c.name === category);
-  if (cat) {
-    cat.items = cat.items.filter(i => i.name !== item);
-  }
-
-  saveDB(db);
-  res.json({ ok: true });
-});
-
-// ===================== BOT LOGIC =====================
+// ================= BOT =================
 function handleMessage(text = "") {
   const msg = text.toLowerCase();
+  const db = loadDB();
 
   if (msg === "hi" || msg === "hello" || msg === "မင်္ဂလာပါ") {
     return "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
   }
 
-  const db = loadDB();
-
   for (const cat of db.categories) {
     for (const item of cat.items) {
-
       if (msg.includes(item.name.toLowerCase())) {
-
         let reply = `📄 ${item.name}\n\n`;
 
         for (const size in item.sizes) {
-          const val = item.sizes[size];
-
-          reply += `${size}:\n`;
-
-          if (val["1"]) reply += `1 Side: ${val["1"]} Ks\n`;
-          if (val["2"]) reply += `2 Side: ${val["2"]} Ks\n`;
-
-          reply += "\n";
+          const s = item.sizes[size];
+          reply += `${size}:\n1 Side: ${s["1"]} Ks\n2 Side: ${s["2"]} Ks\n\n`;
         }
 
         return reply;
@@ -105,46 +83,40 @@ function handleMessage(text = "") {
   return "❌ Item မတွေ့ပါ";
 }
 
-// ===================== VIBER WEBHOOK =====================
+// ================= VIBER =================
 app.post("/webhook", async (req, res) => {
-  try {
-    const event = req.body;
+  const event = req.body;
 
-    if (event.event === "message") {
-      const text = event.message.text;
-      const sender = event.sender.id;
+  if (event.event === "message") {
+    const text = event.message.text;
+    const sender = event.sender.id;
 
-      const reply = handleMessage(text);
+    const reply = handleMessage(text);
 
-      await axios.post(
-        "https://chatapi.viber.com/pa/send_message",
-        {
-          receiver: sender,
-          type: "text",
-          text: reply,
-          sender: { name: "7 Star Sayar Gyi" }
-        },
-        {
-          headers: {
-            "X-Viber-Auth-Token": process.env.VIBER_TOKEN
-          }
+    await axios.post(
+      "https://chatapi.viber.com/pa/send_message",
+      {
+        receiver: sender,
+        type: "text",
+        text: reply,
+        sender: { name: "7 Star Sayar Gyi" }
+      },
+      {
+        headers: {
+          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
         }
-      );
-    }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("❌ WEBHOOK ERROR:", err.message);
-    res.sendStatus(200);
+      }
+    );
   }
+
+  res.sendStatus(200);
 });
 
-// ===================== ROOT =====================
+// ================= START =================
 app.get("/", (req, res) => {
   res.send("🚀 Viber AI Running");
 });
 
-// ===================== START =====================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log("🚀 Server running on " + PORT);

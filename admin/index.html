@@ -1,77 +1,38 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Price Admin Panel</title>
-
+  <title>Admin Panel</title>
   <style>
-    body { font-family: Arial; background:#0f172a; color:white; padding:20px; }
-
-    input, select, button {
-      padding:10px;
-      margin:5px;
-      border-radius:6px;
-      border:none;
-    }
-
-    button { background:#38bdf8; cursor:pointer; }
-
-    table {
-      width:100%;
-      margin-top:20px;
-      border-collapse:collapse;
-      background:#1e293b;
-    }
-
-    th, td {
-      padding:10px;
-      border-bottom:1px solid #334155;
-    }
-
+    body { background:#0f172a; color:white; font-family:Arial; padding:20px; }
+    input, button { padding:8px; margin:5px; }
+    table { width:100%; margin-top:20px; border-collapse:collapse; }
+    th, td { border:1px solid #334155; padding:8px; }
     th { background:#334155; }
-
-    .delete { background:red; color:white; }
   </style>
 </head>
-
 <body>
 
 <h2>📊 Price Admin Panel</h2>
 
-<select id="type" onchange="toggle()">
-  <option value="table">Table (A4 / sqft)</option>
-  <option value="fixed">Fixed (Stamp / Bond)</option>
-</select>
-
-<br>
-
 <input id="category" placeholder="Category">
-<input id="item" placeholder="Item Name">
+<input id="item" placeholder="Item">
+<input id="size" placeholder="Size">
+<input id="side1" placeholder="1 Side">
+<input id="side2" placeholder="2 Side">
 
-<div id="tableBox">
-  <input id="size" placeholder="Size">
-  <input id="side1" placeholder="1 Side">
-  <input id="side2" placeholder="2 Side">
-</div>
-
-<div id="fixedBox" style="display:none;">
-  <input id="fixedValue" placeholder="Value (100 / 200)">
-  <input id="fixedPrice" placeholder="Price">
-</div>
-
-<button onclick="save()">➕ Save</button>
+<button onclick="addItem()">Save</button>
 
 <table>
   <thead>
     <tr>
       <th>Category</th>
       <th>Item</th>
-      <th>Key</th>
+      <th>Size</th>
       <th>1</th>
       <th>2</th>
-      <th>Action</th>
     </tr>
   </thead>
-  <tbody id="tb"></tbody>
+  <tbody id="tableBody"></tbody>
 </table>
 
 <script src="app.js"></script>

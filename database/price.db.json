@@ -5,16 +5,14 @@
       "items": [
         {
           "name": "Art Paper 128g",
-          "type": "table",
-          "prices": {
+          "sizes": {
             "A4": { "1": 1400, "2": 2100 },
             "13x19": { "1": 3800, "2": 5000 }
           }
         },
         {
           "name": "Art Card 250g",
-          "type": "table",
-          "prices": {
+          "sizes": {
             "A4": { "1": 2200, "2": 2800 },
             "13x19": { "1": 5300, "2": 6500 }
           }
@@ -26,8 +24,7 @@
       "items": [
         {
           "name": "PVC Card",
-          "type": "table",
-          "prices": {
+          "sizes": {
             "Standard": { "1": 5000, "2": 6000 }
           }
         }
@@ -38,8 +35,7 @@
       "items": [
         {
           "name": "ECO",
-          "type": "table",
-          "prices": {
+          "sizes": {
             "1 sqft": { "1": 1800, "2": 1900 }
           }
         }
