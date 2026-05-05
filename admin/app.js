@@ -1,67 +1,75 @@
-let editMode = null;
+let db = {};
 
+// LOAD DATA
+async function load() {
+  const res = await fetch('/api/prices');
+  db = await res.json();
+
+  renderCategory();
+  renderList();
+}
+
+// CATEGORY DROPDOWN
+function renderCategory() {
+  category.innerHTML = "";
+
+  db.categories.forEach(c => {
+    let opt = document.createElement("option");
+    opt.value = c.name;
+    opt.innerText = c.name;
+    category.appendChild(opt);
+  });
+}
+
+// SAVE
 async function save() {
+
+  let cat = newCategory.value || category.value;
+
   const data = {
-    category: category.value,
+    category: cat,
     item: item.value,
-    type: type.value,
     size: size.value,
-    side1: side1.value,
-    side2: side2.value,
+    side: side.value,
     price: price.value
   };
 
-  await fetch('/api/add-item', {
+  await fetch('/api/save-v2', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)
   });
 
-  resetForm();
+  newCategory.value = "";
+  item.value = "";
+  size.value = "";
+  price.value = "";
+
   load();
 }
 
-function resetForm() {
-  category.value = "";
-  item.value = "";
-  size.value = "";
-  side1.value = "";
-  side2.value = "";
-  price.value = "";
-  editMode = null;
-}
-
-async function deleteItem(catName, itemName) {
+// DELETE
+async function del(cat, itemName) {
   await fetch('/api/delete-item', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ category: catName, item: itemName })
+    body: JSON.stringify({ category: cat, item: itemName })
   });
 
   load();
 }
 
-function editItem(cat, item) {
-  category.value = cat.name;
-  itemInput = item.name;
-  item.value = item.name;
-  type.value = item.type;
+// RENDER LIST
+function renderList() {
 
-  editMode = { cat, item };
-}
-
-async function load() {
-  const res = await fetch('/api/prices');
-  const db = await res.json();
-
-  const box = document.getElementById("list");
-  box.innerHTML = "";
+  list.innerHTML = "";
 
   db.categories.forEach(cat => {
 
     let catDiv = document.createElement("div");
-    catDiv.innerHTML = `<div class="cat">📁 ${cat.name}</div>`;
-    box.appendChild(catDiv);
+    catDiv.className = "cat";
+    catDiv.innerText = "📁 " + cat.name;
+    list.appendChild(catDiv);
 
     cat.items.forEach(item => {
 
@@ -70,32 +78,18 @@ async function load() {
 
       let html = `<b>${item.name}</b><br>`;
 
-      if (item.type === "table") {
-        for (let s in item.prices) {
-          let p = item.prices[s];
-          html += `${s} → ${p["1"]}/${p["2"]}<br>`;
-        }
-      }
-
-      if (item.type === "sqft") {
-        html += `1 sqft → ${item.price} Ks<br>`;
-      }
-
-      if (item.type === "fixed") {
-        for (let s in item.prices) {
-          html += `${s} → ${item.prices[s]} Ks<br>`;
-        }
-      }
+      item.entries.forEach(e => {
+        html += `${e.size} ${e.side ? e.side+" side" : ""} → ${e.price} Ks<br>`;
+      });
 
       html += `
         <div class="actions">
-          <button class="edit" onclick='editItem(${JSON.stringify(cat)}, ${JSON.stringify(item)})'>Edit</button>
-          <button class="delete" onclick="deleteItem('${cat.name}','${item.name}')">Delete</button>
+          <button class="delete" onclick="del('${cat.name}','${item.name}')">Delete</button>
         </div>
       `;
 
       div.innerHTML = html;
-      box.appendChild(div);
+      list.appendChild(div);
     });
   });
 }

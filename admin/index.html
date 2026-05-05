@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>7Star Admin</title>
+  <title>7Star Admin Pro</title>
+
   <style>
     body {
       font-family: Arial;
-      background: #f5f7fb;
+      background: #eef2f7;
       margin: 0;
       padding: 20px;
     }
@@ -19,7 +20,7 @@
       gap: 20px;
     }
 
-    .form-box, .list-box {
+    .box {
       background: white;
       padding: 15px;
       border-radius: 10px;
@@ -33,10 +34,10 @@
     }
 
     button {
-      padding: 8px 12px;
+      padding: 8px;
       border: none;
-      cursor: pointer;
       border-radius: 6px;
+      cursor: pointer;
     }
 
     .save {
@@ -46,59 +47,67 @@
     }
 
     .card {
-      border-bottom: 1px solid #eee;
-      padding: 8px 0;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #fafafa;
     }
 
     .cat {
       font-weight: bold;
       margin-top: 10px;
+      color: #2d89ff;
+    }
+
+    .edit {
+      background: orange;
+      color: white;
+    }
+
+    .delete {
+      background: red;
+      color: white;
     }
 
     .actions button {
       margin-right: 5px;
-      background: #ddd;
-    }
-
-    .delete {
-      background: #ff4d4d;
-      color: white;
-    }
-
-    .edit {
-      background: #ffaa00;
-      color: white;
     }
   </style>
 </head>
 
 <body>
 
-<h2>📊 7Star Price Admin</h2>
+<h2>📊 7Star Admin Pro</h2>
 
 <div class="container">
 
   <!-- FORM -->
-  <div class="form-box">
-    <input id="category" placeholder="Category">
-    <input id="item" placeholder="Item">
+  <div class="box">
 
-    <select id="type">
-      <option value="table">table</option>
-      <option value="fixed">fixed</option>
-      <option value="sqft">sqft</option>
+    <!-- CATEGORY -->
+    <select id="category"></select>
+    <input id="newCategory" placeholder="New Category">
+
+    <input id="item" placeholder="Item name">
+
+    <!-- SIZE -->
+    <input id="size" placeholder="Size (A4 / 13x19 / custom)">
+
+    <!-- SIDE -->
+    <select id="side">
+      <option value="">No Side</option>
+      <option value="1">1 Side</option>
+      <option value="2">2 Side</option>
     </select>
 
-    <input id="size" placeholder="Size">
-    <input id="side1" placeholder="1 Side">
-    <input id="side2" placeholder="2 Side">
-    <input id="price" placeholder="Price">
+    <!-- PRICE -->
+    <input id="price" placeholder="Price (number only)">
 
     <button class="save" onclick="save()">Save</button>
   </div>
 
   <!-- LIST -->
-  <div class="list-box">
+  <div class="box">
     <div id="list"></div>
   </div>
 

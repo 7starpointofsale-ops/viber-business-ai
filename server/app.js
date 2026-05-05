@@ -2,13 +2,9 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 
-const { findItem, calculate } = require("./services/price.engine");
-
 const app = express();
 app.use(express.json());
 
-// =======================
-// PATH
 // =======================
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
@@ -21,30 +17,29 @@ app.use("/admin", express.static(path.join(__dirname, "../admin")));
 // HOME
 // =======================
 app.get("/", (req, res) => {
-  res.send("✅ Viber AI Running");
+  res.send("✅ 7Star AI Running");
 });
 
 // =======================
-// GET ALL PRICES
+// GET DB
 // =======================
 app.get("/api/prices", (req, res) => {
   try {
-    const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+    const db = JSON.parse(fs.readFileSync(DB_PATH));
     res.json(db);
-  } catch (err) {
-    console.log("API ERROR:", err);
-    res.status(500).json({ error: "cannot read db" });
+  } catch (e) {
+    res.status(500).json({ error: "db error" });
   }
 });
 
 // =======================
-// ADD / UPDATE ITEM
+// SAVE (NEW STRUCTURE)
 // =======================
-app.post("/api/add-item", (req, res) => {
+app.post("/api/save-v2", (req, res) => {
   try {
-    const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+    const db = JSON.parse(fs.readFileSync(DB_PATH));
 
-    const { category, item, type, size, side1, side2, price } = req.body;
+    const { category, item, size, side, price } = req.body;
 
     let cat = db.categories.find(c => c.name === category);
     if (!cat) {
@@ -54,45 +49,32 @@ app.post("/api/add-item", (req, res) => {
 
     let it = cat.items.find(i => i.name === item);
     if (!it) {
-      it = { name: item, type: type, prices: {} };
+      it = { name: item, entries: [] };
       cat.items.push(it);
     }
 
-    it.type = type;
-
-    if (type === "table") {
-      if (!it.prices) it.prices = {};
-      it.prices[size] = {
-        "1": Number(side1 || 0),
-        "2": Number(side2 || 0)
-      };
-    }
-
-    if (type === "fixed") {
-      if (!it.prices) it.prices = {};
-      it.prices[size] = Number(price || 0);
-    }
-
-    if (type === "sqft") {
-      it.price = Number(price || 0);
-    }
+    it.entries.push({
+      size,
+      side,
+      price: Number(price)
+    });
 
     fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 
     res.json({ ok: true });
 
   } catch (err) {
-    console.log("SAVE ERROR:", err);
-    res.status(500).json({ error: "save failed" });
+    console.log(err);
+    res.status(500).json({ error: "save error" });
   }
 });
 
 // =======================
-// DELETE ITEM
+// DELETE
 // =======================
 app.post("/api/delete-item", (req, res) => {
   try {
-    const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+    const db = JSON.parse(fs.readFileSync(DB_PATH));
 
     const { category, item } = req.body;
 
@@ -106,13 +88,12 @@ app.post("/api/delete-item", (req, res) => {
     res.json({ ok: true });
 
   } catch (err) {
-    console.log("DELETE ERROR:", err);
-    res.status(500).json({ error: "delete failed" });
+    res.status(500).json({ error: "delete error" });
   }
 });
 
 // =======================
-// VIBER WEBHOOK
+// VIBER BOT
 // =======================
 app.post("/webhook", (req, res) => {
   const body = req.body;
@@ -122,12 +103,38 @@ app.post("/webhook", (req, res) => {
 
     let reply = "";
 
+    const db = JSON.parse(fs.readFileSync(DB_PATH));
+
     // GREETING
     if (["hi", "hello", "မင်္ဂလာပါ"].includes(msg)) {
       reply = "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
-    } else {
-      const item = findItem(msg);
-      reply = calculate(item, msg);
+    }
+
+    // CATEGORY LIST
+    else if (db.categories.find(c => msg.includes(c.name.toLowerCase()))) {
+
+      const cat = db.categories.find(c =>
+        msg.includes(c.name.toLowerCase())
+      );
+
+      reply = `📁 ${cat.name}\n\n`;
+
+      cat.items.forEach(i => {
+        reply += `📄 ${i.name}\n`;
+
+        if (i.entries) {
+          i.entries.forEach(e => {
+            reply += `${e.size} ${e.side ? e.side+" side" : ""} → ${e.price} Ks\n`;
+          });
+        }
+
+        reply += "\n";
+      });
+    }
+
+    // ITEM SEARCH
+    else {
+      reply = "❌ Item မတွေ့ပါ";
     }
 
     console.log("User:", msg);
@@ -137,8 +144,6 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 });
 
-// =======================
-// START SERVER
 // =======================
 const PORT = process.env.PORT || 10000;
 
