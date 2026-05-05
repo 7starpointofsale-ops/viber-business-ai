@@ -1,152 +1,107 @@
 let db = {};
 
-// =======================
 // LOAD
-// =======================
 async function load() {
   const res = await fetch('/api/prices');
   db = await res.json();
-
   renderCategory();
   renderList();
 }
 
-// =======================
-// CATEGORY DROPDOWN
-// =======================
+// CATEGORY
 function renderCategory() {
   category.innerHTML = "";
-
   db.categories.forEach(c => {
-    let opt = document.createElement("option");
-    opt.value = c.name;
-    opt.innerText = c.name;
-    category.appendChild(opt);
+    let o = document.createElement("option");
+    o.value = c.name;
+    o.innerText = c.name;
+    category.appendChild(o);
   });
 }
 
-// =======================
 // SAVE
-// =======================
 async function save() {
-
   let cat = newCategory.value || category.value;
 
   const data = {
     category: cat,
     item: item.value,
     size: size.value,
+    paper: paper.value,
     side: side.value,
     price: price.value
   };
 
   await fetch('/api/save-v2', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
     body: JSON.stringify(data)
   });
 
-  newCategory.value = "";
-  item.value = "";
-  size.value = "";
-  price.value = "";
-
-  load(); // refresh
-}
-
-// =======================
-// DELETE ITEM
-// =======================
-async function del(cat, itemName) {
-  await fetch('/api/delete-item', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ category: cat, item: itemName })
-  });
-
+  item.value=""; size.value=""; price.value=""; newCategory.value="";
   load();
 }
 
-// =======================
 // DELETE CATEGORY
-// =======================
 async function deleteCategory() {
-  const cat = category.value;
-
-  if (!confirm("Delete this category?")) return;
+  if (!confirm("Delete category?")) return;
 
   await fetch('/api/delete-category', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ category: cat })
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({category:category.value})
   });
 
   load();
 }
 
-// =======================
-// MULTI DELETE (CHECKBOX)
-// =======================
+// MULTI DELETE
 async function deleteSelected() {
-  const checked = document.querySelectorAll("input[type=checkbox]:checked");
+  const ids = [...document.querySelectorAll("input[type=checkbox]:checked")]
+    .map(x => x.value);
 
-  if (checked.length === 0) {
-    alert("No item selected");
-    return;
-  }
-
-  const ids = Array.from(checked).map(el => el.value);
+  if (!ids.length) return alert("Select first");
 
   await fetch('/api/delete-items', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ ids })
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ids})
   });
 
   load();
 }
 
-// =======================
-// RENDER LIST
-// =======================
+// RENDER
 function renderList() {
-
   list.innerHTML = "";
 
   db.categories.forEach(cat => {
 
-    let catDiv = document.createElement("div");
-    catDiv.className = "cat";
-    catDiv.innerText = "📁 " + cat.name;
-    list.appendChild(catDiv);
+    let c = document.createElement("div");
+    c.className = "cat";
+    c.innerText = "📁 " + cat.name;
+    list.appendChild(c);
 
     cat.items.forEach(item => {
 
-      let div = document.createElement("div");
-      div.className = "card";
+      let d = document.createElement("div");
+      d.className = "card";
 
       let html = `<b>${item.name}</b><br>`;
 
-      // 🔥 FIX (entries safe)
       if (item.entries) {
         item.entries.forEach(e => {
           html += `
             <input type="checkbox" value="${e.id}">
-            ${e.size} ${e.side ? e.side+" side" : ""} → ${e.price} Ks<br>
+            ${e.size} ${(e.paper && !isNaN(e.paper)) ? e.paper+"g" : ""} ${e.side ? e.side+" side" : ""} → ${e.price} Ks<br>
           `;
         });
       }
 
-      html += `
-        <br>
-        <button class="delete" onclick="del('${cat.name}','${item.name}')">Delete Item</button>
-      `;
-
-      div.innerHTML = html;
-      list.appendChild(div);
+      d.innerHTML = html;
+      list.appendChild(d);
     });
   });
 }
 
-// =======================
 load();

@@ -5,92 +5,101 @@
 
   <style>
     body {
-      font-family: Arial;
-      background: #eef2f7;
-      margin: 0;
-      padding: 20px;
+      margin:0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg,#1e3c72,#2a5298);
+      color:white;
     }
 
-    h2 {
-      margin-bottom: 10px;
-    }
+    h2 { margin-bottom:15px; }
 
     .container {
-      display: flex;
-      gap: 20px;
+      display:flex;
+      padding:20px;
+      gap:20px;
     }
 
     .box {
-      background: white;
-      padding: 15px;
-      border-radius: 10px;
-      flex: 1;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      padding:20px;
+      border-radius:12px;
+      flex:1;
     }
 
     input, select {
-      width: 100%;
-      padding: 8px;
-      margin: 5px 0;
+      width:100%;
+      padding:10px;
+      margin:6px 0;
+      border:none;
+      border-radius:6px;
     }
 
     button {
-      padding: 8px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
+      padding:10px;
+      border:none;
+      border-radius:6px;
+      cursor:pointer;
+      margin-top:5px;
     }
 
-    .save { background: #2d89ff; color: white; width: 100%; }
-    .delete { background: red; color: white; }
-    .catDel { background: black; color: white; margin-top: 5px; }
-    .multiDel { background: crimson; color: white; margin-bottom: 10px; }
+    .save { background:#00c853; color:white; width:100%; }
+    .delete { background:#ff1744; color:white; }
+    .multi { background:#ff9100; color:white; }
+    .catDel { background:black; color:white; }
 
     .card {
-      border-radius: 8px;
-      padding: 10px;
-      margin-bottom: 10px;
-      background: #fafafa;
+      background: rgba(255,255,255,0.1);
+      padding:10px;
+      border-radius:8px;
+      margin-top:10px;
     }
 
     .cat {
-      font-weight: bold;
-      margin-top: 15px;
-      color: #2d89ff;
+      font-weight:bold;
+      margin-top:15px;
+      color:#ffd740;
     }
   </style>
 </head>
 
 <body>
 
-<h2>📊 7Star Admin Pro</h2>
-
 <div class="container">
 
-  <!-- FORM -->
   <div class="box">
+    <h2>➕ Add Item</h2>
 
     <select id="category"></select>
     <input id="newCategory" placeholder="New Category">
 
     <input id="item" placeholder="Item name">
-    <input id="size" placeholder="Size (A4 / 13x19 / custom)">
+    <input id="size" placeholder="Size">
+
+    <select id="paper">
+      <option value="">Paper</option>
+      <option value="80">80g</option>
+      <option value="100">100g</option>
+      <option value="120">120g</option>
+      <option value="150">150g</option>
+    </select>
 
     <select id="side">
-      <option value="">No Side</option>
+      <option value="">Side</option>
       <option value="1">1 Side</option>
       <option value="2">2 Side</option>
     </select>
 
-    <input id="price" placeholder="Price (number only)">
+    <input id="price" placeholder="Price">
 
     <button class="save" onclick="save()">Save</button>
     <button class="catDel" onclick="deleteCategory()">Delete Category</button>
-
   </div>
 
-  <!-- LIST -->
   <div class="box">
-    <button class="multiDel" onclick="deleteSelected()">Delete Selected</button>
+    <h2>📋 Data</h2>
+
+    <button class="multi" onclick="deleteSelected()">Delete Selected</button>
     <div id="list"></div>
   </div>
 
