@@ -1,10 +1,14 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 
 const { parseMessage } = require("./services/parser");
 const { calculatePrice } = require("./services/rule.engine");
 const { createOrder } = require("./services/order.service");
+const { getSession, resetSession } = require("./services/session.store");
+
+require("dotenv").config();
 
 const app = express();
 app.use(express.json());
@@ -12,22 +16,67 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
+// VIBER SEND
+// =======================
+async function sendViberMessage(userId, text) {
+  await axios.post("https://chatapi.viber.com/pa/send_message", {
+    receiver: userId,
+    type: "text",
+    text: text
+  }, {
+    headers: {
+      "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+    }
+  });
+}
+
+// =======================
 app.get("/", (req, res) => {
-  res.send("🔥 7Star PRO SYSTEM RUNNING");
+  res.send("🔥 7Star PRO v2 RUNNING");
 });
 
 // =======================
-// VIBER WEBHOOK (UPGRADED)
+// WEBHOOK
 // =======================
-app.post("/webhook", (req, res) => {
+app.post("/webhook", async (req, res) => {
   const body = req.body;
 
   if (body.event === "message") {
+    const userId = body.sender.id;
     const text = body.message.text || "";
     const msg = text.toLowerCase();
 
+    const session = getSession(userId);
     const db = JSON.parse(fs.readFileSync(DB_PATH));
 
+    let reply = "";
+
+    // =======================
+    // STEP: CONFIRM
+    // =======================
+    if (session.step === "confirm") {
+      if (msg === "yes") {
+        const order = createOrder(session.data);
+
+        reply = `✅ Order Confirmed
+ID: ${order.id}
+Service: ${order.service}
+Qty: ${order.qty}
+Price: ${order.price} Ks`;
+
+        resetSession(userId);
+      } else {
+        reply = "❌ Order Cancelled";
+        resetSession(userId);
+      }
+
+      await sendViberMessage(userId, reply);
+      return res.sendStatus(200);
+    }
+
+    // =======================
+    // NORMAL FLOW
+    // =======================
     const parsed = parseMessage(msg);
 
     let foundItem = null;
@@ -40,36 +89,38 @@ app.post("/webhook", (req, res) => {
       });
     });
 
-    let reply = "";
-
-    // =======================
     if (!foundItem) {
       reply = "❌ Service မတွေ့ပါ";
+      await sendViberMessage(userId, reply);
+      return res.sendStatus(200);
     }
 
-    else if (!parsed.size && foundItem.type === "sqft") {
+    // size required
+    if (foundItem.type === "sqft" && !parsed.size) {
       reply = "📏 Size ဘယ်လောက်လဲ? (eg. 3x6)";
+      await sendViberMessage(userId, reply);
+      return res.sendStatus(200);
     }
 
-    else {
-      const price = calculatePrice(foundItem, parsed);
+    const price = calculatePrice(foundItem, parsed);
 
-      const order = createOrder({
-        service: foundItem.name,
-        qty: parsed.qty,
-        price
-      });
+    // save to session (WAIT CONFIRM)
+    session.step = "confirm";
+    session.data = {
+      service: foundItem.name,
+      qty: parsed.qty,
+      price
+    };
 
-      reply = `✅ Order Created
-ID: ${order.id}
-Service: ${order.service}
-Qty: ${order.qty}
-Price: ${order.price} Ks
-Status: ${order.status}`;
-    }
+    reply = `🧾 Order Preview
 
-    console.log("User:", text);
-    console.log("Bot:", reply);
+Service: ${foundItem.name}
+Qty: ${parsed.qty}
+Price: ${price} Ks
+
+Confirm? (yes / no)`;
+
+    await sendViberMessage(userId, reply);
   }
 
   res.sendStatus(200);
