@@ -13,6 +13,11 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
+// ADMIN STATIC (🔥 IMPORTANT)
+// =======================
+app.use("/admin", express.static(path.join(__dirname, "../admin")));
+
+// =======================
 // HOME
 // =======================
 app.get("/", (req, res) => {
@@ -56,6 +61,7 @@ app.post("/api/add-item", (req, res) => {
     it.type = type;
 
     if (type === "table") {
+      if (!it.prices) it.prices = {};
       it.prices[size] = {
         "1": Number(side1 || 0),
         "2": Number(side2 || 0)
@@ -63,6 +69,7 @@ app.post("/api/add-item", (req, res) => {
     }
 
     if (type === "fixed") {
+      if (!it.prices) it.prices = {};
       it.prices[size] = Number(price || 0);
     }
 
@@ -87,10 +94,17 @@ app.post("/webhook", (req, res) => {
   const body = req.body;
 
   if (body.event === "message") {
-    const msg = body.message.text || "";
+    const msg = (body.message.text || "").toLowerCase();
 
-    const item = findItem(msg);
-    const reply = calculate(item, msg);
+    let reply = "";
+
+    // ✅ GREETING
+    if (["hi", "hello", "မင်္ဂလာပါ"].includes(msg)) {
+      reply = "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
+    } else {
+      const item = findItem(msg);
+      reply = calculate(item, msg);
+    }
 
     console.log("User:", msg);
     console.log("Bot:", reply);
