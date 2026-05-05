@@ -1,21 +1,28 @@
+@"
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin</title>
+  <title>Admin Panel</title>
 </head>
 <body>
-  <h2>📊 Price Admin</h2>
 
-  <input id="category" placeholder="Category"><br>
-  <input id="item" placeholder="Item"><br>
-  <input id="type" placeholder="table / fixed / sqft"><br>
-  <input id="size" placeholder="Size"><br>
-  <input id="side1" placeholder="1 Side"><br>
-  <input id="side2" placeholder="2 Side"><br>
-  <input id="price" placeholder="Price (sqft/fixed)"><br>
+<h2>📊 Price Admin Panel</h2>
 
-  <button onclick="save()">Save</button>
+<input id="category" placeholder="Category"><br>
+<input id="item" placeholder="Item"><br>
+<input id="type" placeholder="table / fixed / sqft"><br>
+<input id="size" placeholder="Size"><br>
+<input id="side1" placeholder="1 Side"><br>
+<input id="side2" placeholder="2 Side"><br>
+<input id="price" placeholder="Price"><br>
+
+<button onclick="save()">Save</button>
+
+<h3>📦 List</h3>
+<div id="list"></div>
 
 <script src="js/app.js"></script>
+
 </body>
 </html>
+"@ | Out-File -Encoding utf8 admin\index.html
