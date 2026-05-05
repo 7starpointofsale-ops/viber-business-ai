@@ -1,34 +1,109 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Price Admin Panel</title>
+  <title>7Star Admin</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f5f7fb;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+    }
+
+    .container {
+      display: flex;
+      gap: 20px;
+    }
+
+    .form-box, .list-box {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      flex: 1;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+    }
+
+    button {
+      padding: 8px 12px;
+      border: none;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+
+    .save {
+      background: #2d89ff;
+      color: white;
+      width: 100%;
+    }
+
+    .card {
+      border-bottom: 1px solid #eee;
+      padding: 8px 0;
+    }
+
+    .cat {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .actions button {
+      margin-right: 5px;
+      background: #ddd;
+    }
+
+    .delete {
+      background: #ff4d4d;
+      color: white;
+    }
+
+    .edit {
+      background: #ffaa00;
+      color: white;
+    }
+  </style>
 </head>
+
 <body>
 
-<h2>📊 Price Admin Panel</h2>
+<h2>📊 7Star Price Admin</h2>
 
-<input id="category" placeholder="Category"><br><br>
-<input id="item" placeholder="Item"><br><br>
+<div class="container">
 
-<select id="type">
-  <option value="table">table</option>
-  <option value="fixed">fixed</option>
-  <option value="sqft">sqft</option>
-</select><br><br>
+  <!-- FORM -->
+  <div class="form-box">
+    <input id="category" placeholder="Category">
+    <input id="item" placeholder="Item">
 
-<input id="size" placeholder="Size"><br><br>
-<input id="side1" placeholder="1 Side"><br><br>
-<input id="side2" placeholder="2 Side"><br><br>
-<input id="price" placeholder="Price"><br><br>
+    <select id="type">
+      <option value="table">table</option>
+      <option value="fixed">fixed</option>
+      <option value="sqft">sqft</option>
+    </select>
 
-<button onclick="save()">Save</button>
+    <input id="size" placeholder="Size">
+    <input id="side1" placeholder="1 Side">
+    <input id="side2" placeholder="2 Side">
+    <input id="price" placeholder="Price">
 
-<hr>
+    <button class="save" onclick="save()">Save</button>
+  </div>
 
-<h3>📦 List</h3>
-<div id="list"></div>
+  <!-- LIST -->
+  <div class="list-box">
+    <div id="list"></div>
+  </div>
+
+</div>
 
 <script src="app.js"></script>
-
 </body>
 </html>

@@ -1,68 +1,103 @@
+let editMode = null;
+
 async function save() {
   const data = {
-    category: document.getElementById("category").value,
-    item: document.getElementById("item").value,
-    type: document.getElementById("type").value,
-    size: document.getElementById("size").value,
-    side1: document.getElementById("side1").value,
-    side2: document.getElementById("side2").value,
-    price: document.getElementById("price").value
+    category: category.value,
+    item: item.value,
+    type: type.value,
+    size: size.value,
+    side1: side1.value,
+    side2: side2.value,
+    price: price.value
   };
 
   await fetch('/api/add-item', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {'Content-Type':'application/json'},
     body: JSON.stringify(data)
+  });
+
+  resetForm();
+  load();
+}
+
+function resetForm() {
+  category.value = "";
+  item.value = "";
+  size.value = "";
+  side1.value = "";
+  side2.value = "";
+  price.value = "";
+  editMode = null;
+}
+
+async function deleteItem(catName, itemName) {
+  await fetch('/api/delete-item', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ category: catName, item: itemName })
   });
 
   load();
 }
 
+function editItem(cat, item) {
+  category.value = cat.name;
+  itemInput = item.name;
+  item.value = item.name;
+  type.value = item.type;
+
+  editMode = { cat, item };
+}
+
 async function load() {
-  try {
-    const res = await fetch('/api/prices');
-    const db = await res.json();
+  const res = await fetch('/api/prices');
+  const db = await res.json();
 
-    const box = document.getElementById("list");
-    box.innerHTML = "";
+  const box = document.getElementById("list");
+  box.innerHTML = "";
 
-    db.categories.forEach(cat => {
-      const div = document.createElement("div");
+  db.categories.forEach(cat => {
+
+    let catDiv = document.createElement("div");
+    catDiv.innerHTML = `<div class="cat">📁 ${cat.name}</div>`;
+    box.appendChild(catDiv);
+
+    cat.items.forEach(item => {
+
+      let div = document.createElement("div");
       div.className = "card";
 
-      let html = `<h3>📁 ${cat.name}</h3>`;
+      let html = `<b>${item.name}</b><br>`;
 
-      cat.items.forEach(item => {
-        html += `<b>📄 ${item.name}</b><br>`;
-
-        if (item.type === "table") {
-          for (let s in item.prices) {
-            const p = item.prices[s];
-            html += `${s} → ${p["1"]} / ${p["2"]}<br>`;
-          }
+      if (item.type === "table") {
+        for (let s in item.prices) {
+          let p = item.prices[s];
+          html += `${s} → ${p["1"]}/${p["2"]}<br>`;
         }
+      }
 
-        if (item.type === "sqft") {
-          html += `1 sqft → ${item.price} Ks<br>`;
+      if (item.type === "sqft") {
+        html += `1 sqft → ${item.price} Ks<br>`;
+      }
+
+      if (item.type === "fixed") {
+        for (let s in item.prices) {
+          html += `${s} → ${item.prices[s]} Ks<br>`;
         }
+      }
 
-        if (item.type === "fixed") {
-          for (let s in item.prices) {
-            html += `${s} → ${item.prices[s]} Ks<br>`;
-          }
-        }
-
-        html += "<hr>";
-      });
+      html += `
+        <div class="actions">
+          <button class="edit" onclick='editItem(${JSON.stringify(cat)}, ${JSON.stringify(item)})'>Edit</button>
+          <button class="delete" onclick="deleteItem('${cat.name}','${item.name}')">Delete</button>
+        </div>
+      `;
 
       div.innerHTML = html;
       box.appendChild(div);
     });
-
-  } catch (err) {
-    console.log("LOAD ERROR:", err);
-    document.getElementById("list").innerHTML = "❌ API error";
-  }
+  });
 }
 
 load();

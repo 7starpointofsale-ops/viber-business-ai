@@ -13,7 +13,7 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// ADMIN STATIC (🔥 IMPORTANT)
+// ADMIN STATIC
 // =======================
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
@@ -25,7 +25,7 @@ app.get("/", (req, res) => {
 });
 
 // =======================
-// GET ALL PRICES (ADMIN)
+// GET ALL PRICES
 // =======================
 app.get("/api/prices", (req, res) => {
   try {
@@ -38,7 +38,7 @@ app.get("/api/prices", (req, res) => {
 });
 
 // =======================
-// ADD ITEM (ADMIN)
+// ADD / UPDATE ITEM
 // =======================
 app.post("/api/add-item", (req, res) => {
   try {
@@ -88,6 +88,30 @@ app.post("/api/add-item", (req, res) => {
 });
 
 // =======================
+// DELETE ITEM
+// =======================
+app.post("/api/delete-item", (req, res) => {
+  try {
+    const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+
+    const { category, item } = req.body;
+
+    const cat = db.categories.find(c => c.name === category);
+    if (!cat) return res.json({ ok: false });
+
+    cat.items = cat.items.filter(i => i.name !== item);
+
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+
+    res.json({ ok: true });
+
+  } catch (err) {
+    console.log("DELETE ERROR:", err);
+    res.status(500).json({ error: "delete failed" });
+  }
+});
+
+// =======================
 // VIBER WEBHOOK
 // =======================
 app.post("/webhook", (req, res) => {
@@ -98,7 +122,7 @@ app.post("/webhook", (req, res) => {
 
     let reply = "";
 
-    // ✅ GREETING
+    // GREETING
     if (["hi", "hello", "မင်္ဂလာပါ"].includes(msg)) {
       reply = "Hello 👋 7Star Printing AI မှကြိုဆိုပါတယ်";
     } else {
