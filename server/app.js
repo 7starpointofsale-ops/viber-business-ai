@@ -9,6 +9,13 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
+// HELPER (ID GENERATOR)
+// =======================
+function uid() {
+  return Date.now().toString() + Math.floor(Math.random() * 1000);
+}
+
+// =======================
 // ADMIN STATIC
 // =======================
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
@@ -33,7 +40,7 @@ app.get("/api/prices", (req, res) => {
 });
 
 // =======================
-// SAVE (NEW STRUCTURE)
+// SAVE (FIXED)
 // =======================
 app.post("/api/save-v2", (req, res) => {
   try {
@@ -49,11 +56,16 @@ app.post("/api/save-v2", (req, res) => {
 
     let it = cat.items.find(i => i.name === item);
     if (!it) {
-      it = { name: item, entries: [] };
+      it = { 
+        id: uid(),   // ✅ ID added
+        name: item, 
+        entries: [] 
+      };
       cat.items.push(it);
     }
 
     it.entries.push({
+      id: uid(), // ✅ entry ID
       size,
       side,
       price: Number(price)
@@ -70,12 +82,40 @@ app.post("/api/save-v2", (req, res) => {
 });
 
 // =======================
-// DELETE
+// DELETE MULTI (CHECKBOX SUPPORT)
+// =======================
+app.post("/api/delete-items", (req, res) => {
+  try {
+    const db = JSON.parse(fs.readFileSync(DB_PATH));
+    const { ids } = req.body;
+
+    db.categories.forEach(cat => {
+      cat.items.forEach(item => {
+        if (item.entries) {
+          item.entries = item.entries.filter(e => !ids.includes(e.id));
+        }
+      });
+
+      // remove empty items
+      cat.items = cat.items.filter(i => i.entries && i.entries.length > 0);
+    });
+
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+
+    res.json({ ok: true });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "delete error" });
+  }
+});
+
+// =======================
+// DELETE ITEM (OLD)
 // =======================
 app.post("/api/delete-item", (req, res) => {
   try {
     const db = JSON.parse(fs.readFileSync(DB_PATH));
-
     const { category, item } = req.body;
 
     const cat = db.categories.find(c => c.name === category);
@@ -132,7 +172,6 @@ app.post("/webhook", (req, res) => {
       });
     }
 
-    // ITEM SEARCH
     else {
       reply = "❌ Item မတွေ့ပါ";
     }
