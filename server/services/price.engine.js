@@ -1,4 +1,3 @@
-@"
 const fs = require("fs");
 const path = require("path");
 
@@ -28,17 +27,23 @@ function findItem(msg) {
 }
 
 function calculate(item, msg) {
+  if (!item) return "❌ Item မတွေ့ပါ";
+
   if (item.type === "sqft") {
     const match = msg.match(/(\d+)\s*x\s*(\d+)/);
-    if (!match) return "❌ Size မမှန်ပါ";
+
+    if (!match) {
+      return "❌ Size မမှန်ပါ (ဥပမာ 3x4)";
+    }
 
     const w = Number(match[1]);
     const h = Number(match[2]);
     const sqft = w * h;
+
     const price = sqft * item.price;
 
     return `📄 ${item.name}
-Size: ${w}x${h} ft
+Size: ${w} x ${h} ft
 Area: ${sqft} sqft
 Price: ${price} Ks`;
   }
@@ -62,4 +67,3 @@ Price: ${price} Ks`;
 }
 
 module.exports = { findItem, calculate };
-"@ | Out-File -Encoding utf8 server\services\price.engine.js
