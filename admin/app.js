@@ -1,6 +1,8 @@
 let db = {};
 
-// LOAD DATA
+// =======================
+// LOAD
+// =======================
 async function load() {
   const res = await fetch('/api/prices');
   db = await res.json();
@@ -9,7 +11,9 @@ async function load() {
   renderList();
 }
 
+// =======================
 // CATEGORY DROPDOWN
+// =======================
 function renderCategory() {
   category.innerHTML = "";
 
@@ -21,7 +25,9 @@ function renderCategory() {
   });
 }
 
+// =======================
 // SAVE
+// =======================
 async function save() {
 
   let cat = newCategory.value || category.value;
@@ -45,10 +51,12 @@ async function save() {
   size.value = "";
   price.value = "";
 
-  load();
+  load(); // refresh
 }
 
-// DELETE
+// =======================
+// DELETE ITEM
+// =======================
 async function del(cat, itemName) {
   await fetch('/api/delete-item', {
     method: 'POST',
@@ -59,7 +67,48 @@ async function del(cat, itemName) {
   load();
 }
 
+// =======================
+// DELETE CATEGORY
+// =======================
+async function deleteCategory() {
+  const cat = category.value;
+
+  if (!confirm("Delete this category?")) return;
+
+  await fetch('/api/delete-category', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ category: cat })
+  });
+
+  load();
+}
+
+// =======================
+// MULTI DELETE (CHECKBOX)
+// =======================
+async function deleteSelected() {
+  const checked = document.querySelectorAll("input[type=checkbox]:checked");
+
+  if (checked.length === 0) {
+    alert("No item selected");
+    return;
+  }
+
+  const ids = Array.from(checked).map(el => el.value);
+
+  await fetch('/api/delete-items', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids })
+  });
+
+  load();
+}
+
+// =======================
 // RENDER LIST
+// =======================
 function renderList() {
 
   list.innerHTML = "";
@@ -78,14 +127,19 @@ function renderList() {
 
       let html = `<b>${item.name}</b><br>`;
 
-      item.entries.forEach(e => {
-        html += `${e.size} ${e.side ? e.side+" side" : ""} → ${e.price} Ks<br>`;
-      });
+      // 🔥 FIX (entries safe)
+      if (item.entries) {
+        item.entries.forEach(e => {
+          html += `
+            <input type="checkbox" value="${e.id}">
+            ${e.size} ${e.side ? e.side+" side" : ""} → ${e.price} Ks<br>
+          `;
+        });
+      }
 
       html += `
-        <div class="actions">
-          <button class="delete" onclick="del('${cat.name}','${item.name}')">Delete</button>
-        </div>
+        <br>
+        <button class="delete" onclick="del('${cat.name}','${item.name}')">Delete Item</button>
       `;
 
       div.innerHTML = html;
@@ -94,4 +148,5 @@ function renderList() {
   });
 }
 
+// =======================
 load();

@@ -9,7 +9,7 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// HELPER (ID GENERATOR)
+// HELPER
 // =======================
 function uid() {
   return Date.now().toString() + Math.floor(Math.random() * 1000);
@@ -55,17 +55,23 @@ app.post("/api/save-v2", (req, res) => {
     }
 
     let it = cat.items.find(i => i.name === item);
+
     if (!it) {
-      it = { 
-        id: uid(),   // ✅ ID added
-        name: item, 
-        entries: [] 
+      it = {
+        id: uid(),
+        name: item,
+        entries: []
       };
       cat.items.push(it);
     }
 
+    // ✅ CRITICAL FIX
+    if (!it.entries) {
+      it.entries = [];
+    }
+
     it.entries.push({
-      id: uid(), // ✅ entry ID
+      id: uid(),
       size,
       side,
       price: Number(price)
@@ -82,7 +88,7 @@ app.post("/api/save-v2", (req, res) => {
 });
 
 // =======================
-// DELETE MULTI (CHECKBOX SUPPORT)
+// DELETE MULTI (CHECKBOX)
 // =======================
 app.post("/api/delete-items", (req, res) => {
   try {
@@ -107,6 +113,26 @@ app.post("/api/delete-items", (req, res) => {
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: "delete error" });
+  }
+});
+
+// =======================
+// ❗ DELETE CATEGORY (NEW)
+// =======================
+app.post("/api/delete-category", (req, res) => {
+  try {
+    const db = JSON.parse(fs.readFileSync(DB_PATH));
+    const { category } = req.body;
+
+    db.categories = db.categories.filter(c => c.name !== category);
+
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+
+    res.json({ ok: true });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "delete category error" });
   }
 });
 

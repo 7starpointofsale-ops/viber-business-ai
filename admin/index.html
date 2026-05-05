@@ -40,11 +40,10 @@
       cursor: pointer;
     }
 
-    .save {
-      background: #2d89ff;
-      color: white;
-      width: 100%;
-    }
+    .save { background: #2d89ff; color: white; width: 100%; }
+    .delete { background: red; color: white; }
+    .catDel { background: black; color: white; margin-top: 5px; }
+    .multiDel { background: crimson; color: white; margin-bottom: 10px; }
 
     .card {
       border-radius: 8px;
@@ -55,22 +54,8 @@
 
     .cat {
       font-weight: bold;
-      margin-top: 10px;
+      margin-top: 15px;
       color: #2d89ff;
-    }
-
-    .edit {
-      background: orange;
-      color: white;
-    }
-
-    .delete {
-      background: red;
-      color: white;
-    }
-
-    .actions button {
-      margin-right: 5px;
     }
   </style>
 </head>
@@ -84,30 +69,28 @@
   <!-- FORM -->
   <div class="box">
 
-    <!-- CATEGORY -->
     <select id="category"></select>
     <input id="newCategory" placeholder="New Category">
 
     <input id="item" placeholder="Item name">
-
-    <!-- SIZE -->
     <input id="size" placeholder="Size (A4 / 13x19 / custom)">
 
-    <!-- SIDE -->
     <select id="side">
       <option value="">No Side</option>
       <option value="1">1 Side</option>
       <option value="2">2 Side</option>
     </select>
 
-    <!-- PRICE -->
     <input id="price" placeholder="Price (number only)">
 
     <button class="save" onclick="save()">Save</button>
+    <button class="catDel" onclick="deleteCategory()">Delete Category</button>
+
   </div>
 
   <!-- LIST -->
   <div class="box">
+    <button class="multiDel" onclick="deleteSelected()">Delete Selected</button>
     <div id="list"></div>
   </div>
 
