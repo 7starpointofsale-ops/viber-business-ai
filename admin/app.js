@@ -1,18 +1,17 @@
-@"
 async function save() {
   const data = {
-    category: category.value,
-    item: item.value,
-    type: type.value,
-    size: size.value,
-    side1: side1.value,
-    side2: side2.value,
-    price: price.value
+    category: document.getElementById("category").value,
+    item: document.getElementById("item").value,
+    type: document.getElementById("type").value,
+    size: document.getElementById("size").value,
+    side1: document.getElementById("side1").value,
+    side2: document.getElementById("side2").value,
+    price: document.getElementById("price").value
   };
 
   await fetch('/api/add-item', {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
 
@@ -20,39 +19,50 @@ async function save() {
 }
 
 async function load() {
-  const res = await fetch('/api/prices');
-  const db = await res.json();
+  try {
+    const res = await fetch('/api/prices');
+    const db = await res.json();
 
-  let html = '';
+    const box = document.getElementById("list");
+    box.innerHTML = "";
 
-  db.categories.forEach(cat => {
-    html += '<h3>'+cat.name+'</h3>';
+    db.categories.forEach(cat => {
+      const div = document.createElement("div");
+      div.className = "card";
 
-    cat.items.forEach(item => {
-      html += '<b>'+item.name+'</b><br>';
+      let html = `<h3>📁 ${cat.name}</h3>`;
 
-      if (item.type === 'sqft') {
-        html += '1 sqft = '+item.price+' Ks<br>';
-      }
+      cat.items.forEach(item => {
+        html += `<b>📄 ${item.name}</b><br>`;
 
-      if (item.prices) {
-        for (let s in item.prices) {
-          let p = item.prices[s];
-
-          if (typeof p === 'object') {
-            html += s+' → '+p["1"]+'/'+p["2"]+'<br>';
-          } else {
-            html += s+' → '+p+' Ks<br>';
+        if (item.type === "table") {
+          for (let s in item.prices) {
+            const p = item.prices[s];
+            html += `${s} → ${p["1"]} / ${p["2"]}<br>`;
           }
         }
-      }
 
-      html += '<hr>';
+        if (item.type === "sqft") {
+          html += `1 sqft → ${item.price} Ks<br>`;
+        }
+
+        if (item.type === "fixed") {
+          for (let s in item.prices) {
+            html += `${s} → ${item.prices[s]} Ks<br>`;
+          }
+        }
+
+        html += "<hr>";
+      });
+
+      div.innerHTML = html;
+      box.appendChild(div);
     });
-  });
 
-  document.getElementById('list').innerHTML = html;
+  } catch (err) {
+    console.log("LOAD ERROR:", err);
+    document.getElementById("list").innerHTML = "❌ API error";
+  }
 }
 
 load();
-"@ | Out-File -Encoding utf8 admin\js\app.js
