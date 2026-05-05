@@ -1,41 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Panel</title>
-  <style>
-    body { background:#0f172a; color:white; font-family:Arial; padding:20px; }
-    input, button { padding:8px; margin:5px; }
-    table { width:100%; margin-top:20px; border-collapse:collapse; }
-    th, td { border:1px solid #334155; padding:8px; }
-    th { background:#334155; }
-  </style>
+  <title>Admin</title>
 </head>
 <body>
+  <h2>📊 Price Admin</h2>
 
-<h2>📊 Price Admin Panel</h2>
+  <input id="category" placeholder="Category"><br>
+  <input id="item" placeholder="Item"><br>
+  <input id="type" placeholder="table / fixed / sqft"><br>
+  <input id="size" placeholder="Size"><br>
+  <input id="side1" placeholder="1 Side"><br>
+  <input id="side2" placeholder="2 Side"><br>
+  <input id="price" placeholder="Price (sqft/fixed)"><br>
 
-<input id="category" placeholder="Category">
-<input id="item" placeholder="Item">
-<input id="size" placeholder="Size">
-<input id="side1" placeholder="1 Side">
-<input id="side2" placeholder="2 Side">
+  <button onclick="save()">Save</button>
 
-<button onclick="addItem()">Save</button>
-
-<table>
-  <thead>
-    <tr>
-      <th>Category</th>
-      <th>Item</th>
-      <th>Size</th>
-      <th>1</th>
-      <th>2</th>
-    </tr>
-  </thead>
-  <tbody id="tableBody"></tbody>
-</table>
-
-<script src="app.js"></script>
-
+<script src="js/app.js"></script>
 </body>
 </html>

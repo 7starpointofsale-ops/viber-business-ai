@@ -1,43 +1,19 @@
-async function loadData() {
-  const res = await fetch("/api/prices");
-  const data = await res.json();
+async function save() {
+  const data = {
+    category: document.getElementById("category").value,
+    item: document.getElementById("item").value,
+    type: document.getElementById("type").value,
+    size: document.getElementById("size").value,
+    side1: document.getElementById("side1").value,
+    side2: document.getElementById("side2").value,
+    price: document.getElementById("price").value
+  };
 
-  const tbody = document.getElementById("tableBody");
-  tbody.innerHTML = "";
-
-  data.categories.forEach(cat => {
-    cat.items.forEach(item => {
-      for (const size in item.sizes) {
-        const s = item.sizes[size];
-
-        tbody.innerHTML += `
-          <tr>
-            <td>${cat.name}</td>
-            <td>${item.name}</td>
-            <td>${size}</td>
-            <td>${s["1"] || 0}</td>
-            <td>${s["2"] || 0}</td>
-          </tr>
-        `;
-      }
-    });
-  });
-}
-
-async function addItem() {
   await fetch("/api/add-item", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      category: category.value,
-      item: item.value,
-      size: size.value,
-      side1: side1.value,
-      side2: side2.value
-    })
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
   });
 
-  loadData();
+  alert("Saved");
 }
-
-loadData();

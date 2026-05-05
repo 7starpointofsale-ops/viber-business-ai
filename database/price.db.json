@@ -4,28 +4,19 @@
       "name": "Digital Press",
       "items": [
         {
-          "name": "Art Paper 128g",
-          "sizes": {
-            "A4": { "1": 1400, "2": 2100 },
-            "13x19": { "1": 3800, "2": 5000 }
-          }
-        },
-        {
           "name": "Art Card 250g",
-          "sizes": {
+          "type": "table",
+          "prices": {
             "A4": { "1": 2200, "2": 2800 },
             "13x19": { "1": 5300, "2": 6500 }
           }
-        }
-      ]
-    },
-    {
-      "name": "PVC Card",
-      "items": [
+        },
         {
-          "name": "PVC Card",
-          "sizes": {
-            "Standard": { "1": 5000, "2": 6000 }
+          "name": "Art Paper 128g",
+          "type": "table",
+          "prices": {
+            "A4": { "1": 1400, "2": 2100 },
+            "13x19": { "1": 3800, "2": 5000 }
           }
         }
       ]
@@ -34,9 +25,32 @@
       "name": "Vinyl",
       "items": [
         {
-          "name": "ECO",
-          "sizes": {
-            "1 sqft": { "1": 1800, "2": 1900 }
+          "name": "Vinyl ECO",
+          "type": "sqft",
+          "price": 1800
+        }
+      ]
+    },
+    {
+      "name": "Card",
+      "items": [
+        {
+          "name": "PVC Card",
+          "type": "table",
+          "prices": {
+            "Standard": { "1": 5000, "2": 6000 }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fixed",
+      "items": [
+        {
+          "name": "Stamp 100",
+          "type": "fixed",
+          "prices": {
+            "Normal": 3000
           }
         }
       ]
