@@ -17,6 +17,14 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
+// 🔥 ADMIN FIX (ONLY ADDITION - DO NOT TOUCH LOGIC)
+// =======================
+const ADMIN_PATH = path.resolve(__dirname, "../admin");
+app.use("/admin", express.static(ADMIN_PATH));
+
+// =======================
+// SEND VIBER
+// =======================
 async function send(userId, text) {
   await axios.post("https://chatapi.viber.com/pa/send_message", {
     receiver: userId,
@@ -30,23 +38,23 @@ async function send(userId, text) {
 }
 
 // =======================
-// SAFE CALCULATOR (FIXED ❗)
+// SAFE MATH
 // =======================
 function isMath(msg) {
-  // only numbers + operators
   return /^[0-9+\-*/().\s]+$/.test(msg);
 }
 
 function calc(msg) {
   try {
     if (isMath(msg)) {
-      const result = eval(msg);
-      return `🧮 ${result}`;
+      return `🧮 ${eval(msg)}`;
     }
   } catch {}
   return null;
 }
 
+// =======================
+// WEBHOOK (UNCHANGED CORE LOGIC)
 // =======================
 app.post("/webhook", async (req, res) => {
   const body = req.body;
@@ -61,16 +69,16 @@ app.post("/webhook", async (req, res) => {
   const db = JSON.parse(fs.readFileSync(DB_PATH));
 
   // =======================
-  // GREETING
+  // GREETING (UNCHANGED)
   // =======================
   if (["hi","hello","hey","မင်္ဂလာပါ"].includes(msg)) {
-    resetSession(userId); // 🔥 FIX
+    resetSession(userId);
     await send(userId, "👋 7Star System Ready\nType service (vinyl, card...)");
     return res.sendStatus(200);
   }
 
   // =======================
-  // CALCULATOR (ONLY IF NO SESSION ACTIVE)
+  // CALCULATOR (UNCHANGED)
   // =======================
   if (session.step === "idle") {
     const c = calc(msg);
@@ -81,11 +89,10 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // STEP: SIZE
+  // SIZE STEP (UNCHANGED LOGIC)
   // =======================
   if (session.step === "ask_size") {
 
-    // normalize size input
     const sizeMatch = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
     if (sizeMatch) {
       session.data.size = `${sizeMatch[1]}x${sizeMatch[2]}`;
@@ -100,7 +107,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // STEP: QTY
+  // QTY STEP
   // =======================
   if (session.step === "ask_qty") {
 
@@ -148,7 +155,7 @@ Confirm? (yes/no)`
   }
 
   // =======================
-  // SERVICE MATCH (FIXED 🔥)
+  // SERVICE MATCH (IMPROVED BUT SAME LOGIC)
   // =======================
   let found = null;
 
@@ -157,7 +164,6 @@ Confirm? (yes/no)`
 
       const name = i.name.toLowerCase();
 
-      // stronger match (fix vinyl issue)
       if (
         msg === name ||
         msg.includes(name) ||
@@ -174,10 +180,8 @@ Confirm? (yes/no)`
     return res.sendStatus(200);
   }
 
-  // save session
   session.data.item = found;
 
-  // start flow
   if (found.type === "sqft") {
     session.step = "ask_size";
     await send(userId, "📏 Size? (eg. 3x6)");
@@ -190,7 +194,25 @@ Confirm? (yes/no)`
 });
 
 // =======================
+// HOME
+// =======================
+app.get("/", (req, res) => {
+  res.send("🚀 7Star System Running");
+});
+
+// =======================
+// PRICE API
+// =======================
+app.get("/api/prices", (req, res) => {
+  res.json(JSON.parse(fs.readFileSync(DB_PATH)));
+});
+
+// =======================
+// START SERVER
+// =======================
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log("🚀 v6 STABLE ENGINE RUNNING");
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("🚀 v6 FIXED RUNNING");
+  console.log("📁 Admin:", ADMIN_PATH);
 });
