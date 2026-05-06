@@ -19,7 +19,6 @@ function loadDB() {
   return DB_CACHE;
 }
 
-// auto reload DB every 10 sec (safe update)
 setInterval(() => {
   try {
     DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
@@ -38,10 +37,16 @@ function clean(msg) {
 }
 
 // =======================
+function formatSize(size) {
+  if (!size) return "";
+  return String(size).toLowerCase().includes("a4") ? "A4" : size;
+}
+
+// =======================
 const userState = {};
 
 // =======================
-// FAST SEND (non-block)
+// FAST SEND
 async function send(userId, text, keyboard = null) {
   const body = {
     receiver: userId,
@@ -81,6 +86,18 @@ const SERVICE_MENU = [
   { label: "💰 ဈေးမေးမယ်", value: "service_price" },
   { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
 ];
+
+// =======================
+// 🔥 QUICK BUTTON (FAST POS MODE)
+function quickKb(item) {
+  return kb([
+    { label: "1️⃣ 1S 50", value: "q_1_50" },
+    { label: "2️⃣ 1S 100", value: "q_1_100" },
+    { label: "3️⃣ 2S 50", value: "q_2_50" },
+    { label: "4️⃣ 2S 100", value: "q_2_100" },
+    { label: "✏️ Custom", value: "q_custom" }
+  ]);
+}
 
 // =======================
 app.post("/webhook", async (req, res) => {
@@ -144,23 +161,23 @@ app.post("/webhook", async (req, res) => {
 
     const state = userState[userId];
 
+    const sizeText = formatSize(item.size);
+
+    // 🔥 QUICK MODE ENTRY
     if (state?.mode === "calc") {
       userState[userId] = {
-        mode: "calc_side",
+        mode: "quick",
         item
       };
 
       await send(
         userId,
 `📄 ${item.item}
-📏 ${item.size} A4
+📏 ${sizeText}
 📦 ${item.gsm}g
 
-👉 Side ရွေးပါ`,
-        kb([
-          { label: "1️⃣ One Side", value: "side_1" },
-          { label: "2️⃣ Two Side", value: "side_2" }
-        ])
+📦 Quick Select (1 tap fast)`,
+        quickKb(item)
       );
 
       return res.sendStatus(200);
@@ -170,7 +187,7 @@ app.post("/webhook", async (req, res) => {
       userId,
 `📄 ${item.item}
 
-📏 Size: ${item.size} A4
+📏 Size: ${sizeText}
 📦 GSM: ${item.gsm}g
 
 💰 1 side: ${item.s1}
@@ -181,50 +198,84 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  if (msg.startsWith("side_")) {
+  // 🔥 QUICK RESULT HANDLER
+  if (msg.startsWith("q_")) {
     const state = userState[userId];
-    if (!state || state.mode !== "calc_side") return res.sendStatus(200);
+    if (!state?.item) return res.sendStatus(200);
 
-    const side = Number(msg.replace("side_", ""));
+    const parts = msg.split("_");
 
-    userState[userId] = {
-      mode: "calc_qty",
-      item: state.item,
-      side
-    };
-
-    await send(
-      userId,
-`📄 ${state.item.item}
-📦 Qty ဘယ်လောက်?`
-    );
-
-    return res.sendStatus(200);
-  }
-
-  // =======================
-  if (userState[userId]?.mode === "calc_qty") {
-
-    const qty = Number(msg);
-    if (!qty) {
-      await send(userId, "❌ Qty number only (eg: 100)");
+    // CUSTOM MODE
+    if (msg === "q_custom") {
+      userState[userId].mode = "custom_qty";
+      await send(userId, "📦 Enter Qty:");
       return res.sendStatus(200);
     }
 
-    const state = userState[userId];
-    const item = state.item;
+    const side = Number(parts[1]);
+    const qty = Number(parts[2]);
 
-    const price = state.side === 2 ? item.s2 : item.s1;
+    const price = side === 2 ? state.item.s2 : state.item.s1;
     const total = price * qty;
+
+    const sizeText = formatSize(state.item.size);
 
     await send(
       userId,
 `🧾 RESULT
 
-📄 ${item.item}
-📏 ${item.size} A4
-📦 ${item.gsm}g
-🧾 ${state.side} Side
+📄 ${state.item.item}
+📏 ${sizeText}
+📦 ${state.item.gsm}g
+🧾 ${side} Side
+📦 ${qty} pcs
+
+💰 Total: ${total} Ks`
+    );
+
+    delete userState[userId];
+    return res.sendStatus(200);
+  }
+
+  // =======================
+  // CUSTOM QTY FLOW
+  if (userState[userId]?.mode === "custom_qty") {
+    const qty = Number(msg);
+    if (!qty) return send(userId, "❌ number only");
+
+    userState[userId].qty = qty;
+    userState[userId].mode = "custom_side";
+
+    await send(userId,
+`🧾 Select Side
+
+1️⃣ One Side
+2️⃣ Two Side`
+    );
+
+    return res.sendStatus(200);
+  }
+
+  if (msg === "side_1" || msg === "side_2") {
+    const state = userState[userId];
+    if (!state || state.mode !== "custom_side") return res.sendStatus(200);
+
+    const side = msg === "side_2" ? 2 : 1;
+    const qty = state.qty;
+
+    const price = side === 2 ? state.item.s2 : state.item.s1;
+    const total = price * qty;
+
+    const sizeText = formatSize(state.item.size);
+
+    await send(
+      userId,
+`🧾 RESULT
+
+📄 ${state.item.item}
+📏 ${sizeText}
+📦 ${state.item.gsm}g
+🧾 ${side} Side
 📦 ${qty} pcs
 
 💰 Total: ${total} Ks`
@@ -242,5 +293,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 FAST + STABLE + FIXED BOT RUNNING");
+  console.log("🚀 QUICK MODE + POS UX BOT RUNNING");
 });
