@@ -21,11 +21,12 @@ function loadDB() {
 }
 
 // =======================
-// CLEAN INPUT
+// CLEAN INPUT (FIX ALL BUGS)
 // =======================
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
+    .replace(/[^a-zA-Z0-9\u1000-\u109F\s]/g, "")
     .toLowerCase()
     .trim();
 }
@@ -111,7 +112,7 @@ app.post("/webhook", async (req, res) => {
 
     const cats = db.categories.map(c => ({
       label: `📁 ${c.name}`,
-      value: c.name
+      value: clean(c.name)   // 🔥 FIX IMPORTANT
     }));
 
     await send(userId, "📁 Select Category", kb(cats));
@@ -129,17 +130,17 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CATEGORY CLICK (FIXED)
+  // CATEGORY CLICK (FIX LOOP)
   // =======================
   const category = db.categories.find(c =>
-    c.name.toLowerCase() === msg
+    clean(c.name) === msg
   );
 
   if (category) {
 
     const items = category.items.map(i => ({
       label: `📄 ${i.item} ${i.size || ""} ${i.gsm || ""}`,
-      value: i.id   // 🔥 IMPORTANT FIX
+      value: i.id
     }));
 
     await send(userId, `📁 ${category.name}`, kb(items));
@@ -147,7 +148,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // ITEM CLICK (FIXED - NO PREFIX BUG)
+  // ITEM CLICK (FIXED)
   // =======================
   const item = db.categories
     .flatMap(c => c.items)
@@ -183,7 +184,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // SIZE CALC (BASIC)
+  // SIZE DETECT
   // =======================
   const size = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
   const qty = msg.match(/(\d+)$/);
@@ -196,9 +197,7 @@ app.post("/webhook", async (req, res) => {
 `🧾 RESULT
 
 📏 Size: ${size[1]}x${size[2]}
-📦 Qty: ${q}
-
-💡 Processing...`
+📦 Qty: ${q}`
     );
 
     return res.sendStatus(200);
@@ -216,5 +215,5 @@ app.post("/webhook", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V12 FIXED FULL SYSTEM RUNNING");
+  console.log("🚀 V12 LOOP FIXED SYSTEM RUNNING");
 });
