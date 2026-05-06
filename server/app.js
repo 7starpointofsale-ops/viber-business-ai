@@ -14,10 +14,8 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 
-const PRICE_DB = path.join(__dirname, "../database/price.db.json");
+const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
-// =======================
-// VIBER SEND
 // =======================
 async function send(userId, text) {
   await axios.post("https://chatapi.viber.com/pa/send_message", {
@@ -32,12 +30,18 @@ async function send(userId, text) {
 }
 
 // =======================
-// CALC
+// SAFE CALCULATOR (FIXED ❗)
 // =======================
+function isMath(msg) {
+  // only numbers + operators
+  return /^[0-9+\-*/().\s]+$/.test(msg);
+}
+
 function calc(msg) {
   try {
-    if (/^[0-9+\-*/().\s]+$/.test(msg)) {
-      return `🧮 ${eval(msg)}`;
+    if (isMath(msg)) {
+      const result = eval(msg);
+      return `🧮 ${result}`;
     }
   } catch {}
   return null;
@@ -54,29 +58,78 @@ app.post("/webhook", async (req, res) => {
   const msg = text.toLowerCase().trim();
 
   const session = getSession(userId);
-  const db = JSON.parse(fs.readFileSync(PRICE_DB));
-
-  // =======================
-  // CALCULATOR
-  // =======================
-  const c = calc(msg);
-  if (c) {
-    await send(userId, c);
-    return res.sendStatus(200);
-  }
+  const db = JSON.parse(fs.readFileSync(DB_PATH));
 
   // =======================
   // GREETING
   // =======================
   if (["hi","hello","hey","မင်္ဂလာပါ"].includes(msg)) {
+    resetSession(userId); // 🔥 FIX
     await send(userId, "👋 7Star System Ready\nType service (vinyl, card...)");
     return res.sendStatus(200);
   }
 
   // =======================
-  // CONFIRM STEP
+  // CALCULATOR (ONLY IF NO SESSION ACTIVE)
+  // =======================
+  if (session.step === "idle") {
+    const c = calc(msg);
+    if (c) {
+      await send(userId, c);
+      return res.sendStatus(200);
+    }
+  }
+
+  // =======================
+  // STEP: SIZE
+  // =======================
+  if (session.step === "ask_size") {
+
+    // normalize size input
+    const sizeMatch = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
+    if (sizeMatch) {
+      session.data.size = `${sizeMatch[1]}x${sizeMatch[2]}`;
+    } else {
+      session.data.size = msg;
+    }
+
+    session.step = "ask_qty";
+
+    await send(userId, "🔢 Quantity?");
+    return res.sendStatus(200);
+  }
+
+  // =======================
+  // STEP: QTY
+  // =======================
+  if (session.step === "ask_qty") {
+
+    session.data.qty = parseInt(msg) || 1;
+
+    const item = session.data.item;
+    const price = calculatePrice(item, session.data);
+
+    session.data.price = price;
+    session.step = "confirm";
+
+    await send(userId,
+`🧾 Preview
+Service: ${item.name}
+Size: ${session.data.size || "-"}
+Qty: ${session.data.qty}
+Price: ${price}
+
+Confirm? (yes/no)`
+    );
+
+    return res.sendStatus(200);
+  }
+
+  // =======================
+  // CONFIRM
   // =======================
   if (session.step === "confirm") {
+
     if (msg === "yes") {
       const orders = readOrders();
 
@@ -95,102 +148,49 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // FIND ITEM (SMART MATCH)
+  // SERVICE MATCH (FIXED 🔥)
   // =======================
-  let item = null;
+  let found = null;
 
   db.categories.forEach(c => {
     c.items.forEach(i => {
-      if (msg.includes(i.name.toLowerCase()) || i.name.toLowerCase().includes(msg)) {
-        item = i;
+
+      const name = i.name.toLowerCase();
+
+      // stronger match (fix vinyl issue)
+      if (
+        msg === name ||
+        msg.includes(name) ||
+        name.includes(msg.split(" ")[0])
+      ) {
+        found = i;
       }
+
     });
   });
 
-  if (!item) {
-    await send(userId, "❌ Service မတွေ့ပါ");
+  if (!found) {
+    await send(userId, "❌ Service မတွေ့ပါ\nTry: vinyl / card / stamp");
     return res.sendStatus(200);
   }
 
-  session.data.item = item;
+  // save session
+  session.data.item = found;
 
-  // =======================
-  // FLOW CONTROL
-  // =======================
-  if (item.type === "sqft") {
+  // start flow
+  if (found.type === "sqft") {
     session.step = "ask_size";
-    await send(userId, "📏 Size?");
-    return res.sendStatus(200);
+    await send(userId, "📏 Size? (eg. 3x6)");
+  } else {
+    session.step = "ask_qty";
+    await send(userId, "🔢 Quantity?");
   }
 
-  session.step = "ask_qty";
-  await send(userId, "🔢 Quantity?");
   res.sendStatus(200);
-});
-
-// =======================
-// SIZE STEP
-// =======================
-app.post("/webhook-size", async (req, res) => {
-  const { userId, text } = req.body;
-
-  const session = getSession(userId);
-
-  session.data.size = text;
-  session.step = "ask_qty";
-
-  await send(userId, "🔢 Quantity?");
-  res.sendStatus(200);
-});
-
-// =======================
-// QTY STEP
-// =======================
-app.post("/webhook-qty", async (req, res) => {
-  const { userId, text } = req.body;
-
-  const session = getSession(userId);
-  const item = session.data.item;
-
-  session.data.qty = parseInt(text) || 1;
-
-  const price = calculatePrice(item, session.data);
-  session.data.price = price;
-
-  session.step = "confirm";
-
-  await send(userId,
-`🧾 Preview
-Service: ${item.name}
-Qty: ${session.data.qty}
-Price: ${price}
-
-Confirm? (yes/no)`
-  );
-
-  res.sendStatus(200);
-});
-
-// =======================
-app.get("/api/orders", (req, res) => {
-  res.json(readOrders());
-});
-
-app.post("/api/update-status", (req, res) => {
-  const { id, status } = req.body;
-
-  const db = readOrders();
-
-  const o = db.orders.find(x => x.id === id);
-  if (o) o.status = status;
-
-  saveOrders(db);
-
-  res.json({ ok: true });
 });
 
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 v5 SYSTEM RUNNING");
+  console.log("🚀 v6 STABLE ENGINE RUNNING");
 });
