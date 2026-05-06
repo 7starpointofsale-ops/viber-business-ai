@@ -6,15 +6,19 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
+// =======================
+// PATH
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// DB CACHE
+// CACHE SAFE
 let DB_CACHE = null;
 
 function loadDB() {
-  if (!DB_CACHE) {
+  try {
     DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  } catch (e) {
+    DB_CACHE = { categories: [] };
   }
   return DB_CACHE;
 }
@@ -24,10 +28,19 @@ function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
+// auto refresh DB
+setInterval(() => {
+  try {
+    DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  } catch (e) {}
+}, 5000);
+
 // =======================
+// STATIC ADMIN
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
+// CLEAN
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
@@ -38,9 +51,11 @@ function clean(msg) {
 }
 
 // =======================
+// USER STATE
 const userState = {};
 
 // =======================
+// VIBER SEND
 async function send(userId, text, keyboard = null) {
   const body = {
     receiver: userId,
@@ -62,6 +77,7 @@ async function send(userId, text, keyboard = null) {
 }
 
 // =======================
+// KEYBOARD
 function kb(items) {
   return {
     Type: "keyboard",
@@ -76,12 +92,13 @@ function kb(items) {
 }
 
 // =======================
-app.post("/api/prices", (req, res) => {
+// API - GET DB (ADMIN FIX)
+app.get("/api/prices", (req, res) => {
   res.json(loadDB());
 });
 
 // =======================
-// SAVE NEW ITEM
+// SAVE
 app.post("/api/save-v2", (req, res) => {
   const db = loadDB();
   const b = req.body;
@@ -98,10 +115,10 @@ app.post("/api/save-v2", (req, res) => {
     item: b.item,
     size: b.size,
     gsm: b.gsm,
-    s1: Number(b.s1),
-    s2: Number(b.s2),
-    lamination: b.lamination,
-    remark: b.remark
+    s1: Number(b.s1 || 0),
+    s2: Number(b.s2 || 0),
+    lamination: b.lamination || "-",
+    remark: b.remark || "-"
   });
 
   saveDB(db);
@@ -114,27 +131,27 @@ app.post("/api/update-entry", (req, res) => {
   const db = loadDB();
   const { id, price } = req.body;
 
-  for (const c of db.categories) {
-    for (const i of c.items) {
+  db.categories.forEach(c => {
+    c.items.forEach(i => {
       if (i.id === id) {
         i.s1 = Number(price);
       }
-    }
-  }
+    });
+  });
 
   saveDB(db);
   res.json({ ok: true });
 });
 
 // =======================
-// DELETE ITEM
+// DELETE
 app.post("/api/delete-entry", (req, res) => {
   const db = loadDB();
   const { id } = req.body;
 
-  for (const c of db.categories) {
+  db.categories.forEach(c => {
     c.items = c.items.filter(i => i.id !== id);
-  }
+  });
 
   saveDB(db);
   res.json({ ok: true });
@@ -148,18 +165,23 @@ app.post("/webhook", async (req, res) => {
 
   const userId = body.sender.id;
   const msg = clean(body.message.text || "");
-
   const db = loadDB();
 
+  // RESET
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
     userState[userId] = {};
-    await send(userId, "📦 7Star System\nSelect Service:", kb([
-      { label: "💰 ဈေးမေးမယ်", value: "service_price" },
-      { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
-    ]));
+
+    await send(userId,
+      "📦 7Star System\nSelect Service:",
+      kb([
+        { label: "💰 ဈေးမေးမယ်", value: "service_price" },
+        { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
+      ])
+    );
     return res.sendStatus(200);
   }
 
+  // MENU
   if (msg === "service_price" || msg === "service_calc") {
     userState[userId] = { mode: msg };
 
@@ -172,6 +194,7 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
+  // CATEGORY
   if (msg.startsWith("cat_")) {
     const i = Number(msg.split("_")[1]);
     const cat = db.categories[i];
@@ -186,13 +209,16 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
+  // ITEM
   if (msg.startsWith("item_")) {
     const p = msg.split("_");
     const item = db.categories[p[1]]?.items[p[2]];
     if (!item) return res.sendStatus(200);
 
-    const state = userState[userId] || {};
-    userState[userId] = { ...state, item };
+    userState[userId] = {
+      ...userState[userId],
+      item
+    };
 
     await send(userId,
 `📄 ${item.item}
@@ -200,10 +226,13 @@ app.post("/webhook", async (req, res) => {
 📦 ${item.gsm}
 
 💰 1S: ${item.s1}
-💰 2S: ${item.s2}`);
+💰 2S: ${item.s2}`
+    );
+
     return res.sendStatus(200);
   }
 
+  // fallback
   await send(userId, "📦 Select Service", kb([
     { label: "💰 ဈေးမေးမယ်", value: "service_price" },
     { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
@@ -215,5 +244,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 FULL SYSTEM READY");
+  console.log("🚀 FULL FIXED SYSTEM RUNNING");
 });
