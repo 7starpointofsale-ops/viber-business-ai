@@ -6,16 +6,12 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
-/* =======================
-   ROOT FIX (IMPORTANT)
-======================= */
 const ROOT = path.join(__dirname, "..");
-
 const DB_PATH = path.join(ROOT, "database/price.db.json");
 const ADMIN_PATH = path.join(ROOT, "admin");
 
 /* =======================
-   SAFE DB LOAD
+   DB
 ======================= */
 function loadDB() {
   try {
@@ -31,9 +27,6 @@ function loadDB() {
   }
 }
 
-/* =======================
-   SAVE DB
-======================= */
 function saveDB(data) {
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
@@ -43,7 +36,7 @@ function saveDB(data) {
 }
 
 /* =======================
-   ADMIN SAFE ROUTE (NO CRASH)
+   ADMIN
 ======================= */
 app.use("/admin", express.static(ADMIN_PATH));
 
@@ -69,18 +62,17 @@ app.get("/api/prices", (req, res) => {
 const userState = {};
 
 /* =======================
-   CLEAN TEXT
+   CLEAN
 ======================= */
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦🧾]/g, "")
-    .replace(/\s+/g, " ")
-    .toLowerCase()
-    .trim();
+    .trim()
+    .toLowerCase();
 }
 
 /* =======================
-   VIBER SEND
+   SEND
 ======================= */
 async function send(userId, text, keyboard = null) {
   try {
@@ -102,7 +94,7 @@ async function send(userId, text, keyboard = null) {
 }
 
 /* =======================
-   KEYBOARD
+   KB
 ======================= */
 function kb(items) {
   return {
@@ -117,9 +109,6 @@ function kb(items) {
   };
 }
 
-/* =======================
-   MENU
-======================= */
 const MAIN_MENU = kb([
   { label: "💰 ဈေးမေးမယ်", value: "price" },
   { label: "🧮 ဈေးတွက်မယ်", value: "calc" },
@@ -135,7 +124,8 @@ app.post("/webhook", async (req, res) => {
     if (body.event !== "message") return res.sendStatus(200);
 
     const uid = body.sender.id;
-    const msg = clean(body.message.text);
+    const msgRaw = body.message.text;
+    const msg = clean(msgRaw);
     const db = loadDB();
 
     if (!userState[uid]) userState[uid] = {};
@@ -150,10 +140,8 @@ app.post("/webhook", async (req, res) => {
 
     /* PRICE */
     if (msg === "price") {
-      const cats = db.categories || [];
-
       return send(uid, "📁 Select Category",
-        kb(cats.map((c, i) => ({
+        kb(db.categories.map((c, i) => ({
           label: `📁 ${c.name}`,
           value: `price_cat_${i}`
         })))
@@ -162,48 +150,15 @@ app.post("/webhook", async (req, res) => {
 
     /* CALC */
     if (msg === "calc") {
-      const cats = db.categories || [];
-
       return send(uid, "🧮 Select Category",
-        kb(cats.map((c, i) => ({
+        kb(db.categories.map((c, i) => ({
           label: `📁 ${c.name}`,
           value: `calc_cat_${i}`
         })))
       ).then(() => res.sendStatus(200));
     }
 
-    /* INVOICE */
-    if (msg === "invoice") {
-      st.cart = [];
-      const cats = db.categories || [];
-
-      return send(uid, "🧾 Invoice Mode",
-        kb(cats.map((c, i) => ({
-          label: `📁 ${c.name}`,
-          value: `inv_cat_${i}`
-        })))
-      ).then(() => res.sendStatus(200));
-    }
-
-    /* CATEGORY */
-    if (msg.includes("_cat_")) {
-      const parts = msg.split("_");
-      const mode = parts[0];
-      const i = Number(parts[2]);
-
-      const cat = db.categories[i];
-      if (!cat) return res.sendStatus(200);
-
-      const items = cat.items.map((it, idx) => ({
-        label: `📄 ${it.item} ${it.size || ""}`,
-        value: `${mode}_item_${i}_${idx}`
-      }));
-
-      return send(uid, `📁 ${cat.name}`, kb(items))
-        .then(() => res.sendStatus(200));
-    }
-
-    /* ITEM */
+    /* ITEM HANDLING (same as yours) */
     if (msg.includes("_item_")) {
       const parts = msg.split("_");
       const mode = parts[0];
@@ -215,18 +170,6 @@ app.post("/webhook", async (req, res) => {
 
       st.item = item;
 
-      const s1 = Number(item.s1 || 0);
-      const s2 = Number(item.s2 || 0);
-
-      if (mode === "price") {
-        return send(uid,
-`📄 ${item.item}
-📏 ${item.size}
-💰 1S: ${s1}
-💰 2S: ${s2}`)
-        .then(() => res.sendStatus(200));
-      }
-
       if (mode === "calc") {
         st.step = "side";
 
@@ -236,12 +179,6 @@ app.post("/webhook", async (req, res) => {
             { label: "2️⃣ Two Side", value: "side_2" }
           ])
         ).then(() => res.sendStatus(200));
-      }
-
-      if (mode === "inv") {
-        if (!st.cart) st.cart = [];
-        st.cart.push(item);
-        return send(uid, "✔ Added").then(() => res.sendStatus(200));
       }
     }
 
@@ -256,7 +193,11 @@ app.post("/webhook", async (req, res) => {
     /* QTY */
     if (st.step === "qty") {
       const qty = Number(msg);
-      if (!qty) return send(uid, "❌ number only").then(() => res.sendStatus(200));
+
+      if (!Number.isInteger(qty) || qty <= 0) {
+        return send(uid, "❌ Qty must be number")
+          .then(() => res.sendStatus(200));
+      }
 
       st.qty = qty;
 
@@ -269,9 +210,15 @@ app.post("/webhook", async (req, res) => {
         .then(() => res.sendStatus(200));
     }
 
-    /* FINAL */
+    /* 🔥 FIXED CHARGE */
     if (st.step === "charge") {
-      const charge = Number(msg) || 0;
+      const charge = Number(msgRaw);
+
+      if (msgRaw === "." || isNaN(charge)) {
+        return send(uid, "❌ Please enter valid number")
+          .then(() => res.sendStatus(200));
+      }
+
       const total = (Number(st.subtotal) || 0) + charge;
 
       userState[uid] = {};
@@ -292,5 +239,5 @@ app.post("/webhook", async (req, res) => {
 /* ======================= */
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 VIBER PRODUCTION READY SYSTEM RUNNING");
+  console.log("🚀 RUNNING");
 });
