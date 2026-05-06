@@ -11,18 +11,18 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// ADMIN STATIC (KEEP)
+// ADMIN STATIC
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
-// GET DB (KEEP)
+// GET DB
 app.get("/api/prices", (req, res) => {
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
   res.json(db);
 });
 
 // =======================
-// SAVE (KEEP ORIGINAL - SAFE)
+// SAVE
 app.post("/api/save-v2", (req, res) => {
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
 
@@ -44,12 +44,11 @@ app.post("/api/save-v2", (req, res) => {
   });
 
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-
   res.json({ ok: true });
 });
 
 // =======================
-// UPDATE PRICE (KEEP)
+// UPDATE
 app.post("/api/update-entry", (req, res) => {
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
   const { id, price } = req.body;
@@ -67,7 +66,7 @@ app.post("/api/update-entry", (req, res) => {
 });
 
 // =======================
-// DELETE ENTRY (KEEP)
+// DELETE
 app.post("/api/delete-entry", (req, res) => {
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
   const { id } = req.body;
@@ -103,21 +102,8 @@ async function send(userId, text) {
 }
 
 // =======================
-// SAFE MATH
-function isMath(msg) {
-  return /^[0-9+\-*/().\s]+$/.test(msg);
-}
-
-function calc(msg) {
-  try {
-    if (isMath(msg)) return eval(msg);
-  } catch {}
-  return null;
-}
-
-// =======================
-// NORMALIZE INPUT (NEW FIX)
-function normalize(msg) {
+// NORMALIZE (MM + fix typo)
+function normalize(msg = "") {
   return msg
     .toLowerCase()
     .replace(/၁/g, "1")
@@ -135,7 +121,7 @@ function normalize(msg) {
 }
 
 // =======================
-// SMART FALLBACK SEARCH (FIX SERVICE BUG)
+// FIND SERVICE (FIXED STRONG MATCH)
 function findService(db, msg) {
   let best = null;
   let score = 0;
@@ -161,7 +147,18 @@ function findService(db, msg) {
 }
 
 // =======================
-// WEBHOOK
+// SAFE CALC
+function calc(msg) {
+  try {
+    if (/^[0-9+\-*/().\s]+$/.test(msg)) {
+      return eval(msg);
+    }
+  } catch {}
+  return null;
+}
+
+// =======================
+// WEBHOOK (FIXED LOGIC)
 app.post("/webhook", async (req, res) => {
   const body = req.body;
 
@@ -175,12 +172,12 @@ app.post("/webhook", async (req, res) => {
   // =======================
   // GREETING
   if (["hi", "hello", "မင်္ဂလာပါ"].includes(msg)) {
-    await send(userId, "👋 7Star System Ready\nType service name (vinyl, paper, card)");
+    await send(userId, "👋 7Star System Ready\nType service name");
     return res.sendStatus(200);
   }
 
   // =======================
-  // CALCULATOR (SAFE)
+  // CALC
   const c = calc(msg);
   if (c !== null) {
     await send(userId, `🧮 ${c}`);
@@ -188,49 +185,55 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // SMART SERVICE FIND
   const item = findService(db, msg);
 
-  // ❌ NOT FOUND
   if (!item) {
-    await send(userId, "❌ Service မတွေ့ပါ\n👉 example: vinyl / art paper / card");
+    await send(userId, "❌ Service မတွေ့ပါ");
     return res.sendStatus(200);
   }
 
   // =======================
-  // SHOW PRICE INFO
   const sizeMatch = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
   const qtyMatch = msg.match(/(\d+)/);
-
   const qty = qtyMatch ? Number(qtyMatch[1]) : 1;
 
-  // STEP 1
-  if (!sizeMatch) {
-    await send(
-      userId,
+  const hasPrice = item.s1 && item.s2;
+
+  // =======================
+  // CASE 1: FULL INPUT → DIRECT RESULT (NO SIZE QUESTION)
+  if (sizeMatch && hasPrice) {
+
+    const total = item.s1 * qty;
+
+    await send(userId,
+`🧾 RESULT
+Item: ${item.item}
+Qty: ${qty}
+
+💰 Total: ${total} Ks`
+    );
+
+    return res.sendStatus(200);
+  }
+
+  // =======================
+  // CASE 2: SERVICE ONLY → SHOW OPTIONS (NO LOOP BUG)
+  if (!sizeMatch && hasPrice) {
+
+    await send(userId,
 `📦 ${item.item}
 
 💰 1 side: ${item.s1}
 💰 2 side: ${item.s2}
 
-📏 Size? (eg: 3x6)`
+👉 send: size qty (eg: 3x6 2)`
     );
+
     return res.sendStatus(200);
   }
 
-  // STEP 2 CALC
-  const total = item.s1 * qty;
-
-  await send(
-    userId,
-`🧾 RESULT
-Item: ${item.item}
-Size: ${sizeMatch[1]}x${sizeMatch[2]}
-Qty: ${qty}
-
-💰 Total: ${total} Ks`
-  );
-
+  // =======================
+  await send(userId, "📏 Please provide size + qty");
   res.sendStatus(200);
 });
 
@@ -238,5 +241,5 @@ Qty: ${qty}
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 SAFE V9 RUNNING (NO BREAK CHANGES)");
+  console.log("🚀 V10 STABLE SYSTEM RUNNING");
 });
