@@ -7,19 +7,23 @@ const app = express();
 app.use(express.json());
 
 // =======================
-// PATH SAFE (RENDER READY)
-const DB_PATH = path.resolve(__dirname, "../database/price.db.json");
-const ADMIN_PATH = path.resolve(__dirname, "../admin");
+// ROOT SAFE PATH (RENDER FIX)
+const ROOT = process.cwd();
+
+const DB_PATH = path.join(ROOT, "database/price.db.json");
+const ADMIN_PATH = path.join(ROOT, "admin");
 
 // =======================
-// INIT DB SAFE
+// DB SAFE LOAD
 function loadDB() {
   try {
     if (!fs.existsSync(DB_PATH)) {
       fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
       fs.writeFileSync(DB_PATH, JSON.stringify({ categories: [] }, null, 2));
     }
-    return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+
+    const raw = fs.readFileSync(DB_PATH, "utf-8");
+    return JSON.parse(raw || '{"categories":[]}');
   } catch (e) {
     console.log("DB ERROR:", e.message);
     return { categories: [] };
@@ -27,25 +31,38 @@ function loadDB() {
 }
 
 // =======================
-// ADMIN STATIC FIX (EXPRESS 5 SAFE)
-app.use("/admin", express.static(ADMIN_PATH));
-
-app.get(/^\/admin\/.*$/, (req, res) => {
-  res.sendFile(path.join(ADMIN_PATH, "index.html"));
-});
+// DB SAVE
+function saveDB(data) {
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.log("SAVE ERROR:", e.message);
+  }
+}
 
 // =======================
-// API FOR ADMIN
+// ADMIN FIX (NO path-to-regexp ERROR)
+if (fs.existsSync(ADMIN_PATH)) {
+  app.use("/admin", express.static(ADMIN_PATH));
+
+  // IMPORTANT FIX (no "/admin/*")
+  app.get("/admin/:path(*)", (req, res) => {
+    res.sendFile(path.join(ADMIN_PATH, "index.html"));
+  });
+}
+
+// =======================
+// API
 app.get("/api/prices", (req, res) => {
   res.json(loadDB());
 });
 
 // =======================
-// USER STATE
+// STATE
 const userState = {};
 
 // =======================
-// CLEAN TEXT
+// CLEAN
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦🧾]/g, "")
@@ -55,7 +72,7 @@ function clean(msg) {
 }
 
 // =======================
-// VIBER SEND SAFE
+// VIBER SEND
 async function send(userId, text, keyboard = null) {
   try {
     await axios.post(
@@ -76,7 +93,7 @@ async function send(userId, text, keyboard = null) {
 }
 
 // =======================
-// KEYBOARD BUILDER
+// KEYBOARD
 function kb(items) {
   return {
     Type: "keyboard",
@@ -112,66 +129,55 @@ app.post("/webhook", async (req, res) => {
     if (!userState[uid]) userState[uid] = {};
     const st = userState[uid];
 
-    // ================= RESET
+    // RESET
     if (["hi", "hello", "menu", "start"].includes(msg)) {
       userState[uid] = {};
       await send(uid, "📦 Main Menu", MAIN_MENU);
       return res.sendStatus(200);
     }
 
-    // ================= PRICE MODE
+    // ================= PRICE
     if (msg === "price") {
-      st.mode = "price";
-
       const cats = db.categories || [];
 
-      await send(uid,
+      return send(uid,
         "📁 Select Category",
         kb(cats.map((c, i) => ({
           label: `📁 ${c.name}`,
           value: `price_cat_${i}`
         })))
-      );
-
-      return res.sendStatus(200);
+      ).then(() => res.sendStatus(200));
     }
 
-    // ================= CALC MODE
+    // ================= CALC
     if (msg === "calc") {
-      st.mode = "calc";
-
       const cats = db.categories || [];
 
-      await send(uid,
+      return send(uid,
         "🧮 Select Category",
         kb(cats.map((c, i) => ({
           label: `📁 ${c.name}`,
           value: `calc_cat_${i}`
         })))
-      );
-
-      return res.sendStatus(200);
+      ).then(() => res.sendStatus(200));
     }
 
-    // ================= INVOICE MODE
+    // ================= INVOICE
     if (msg === "invoice") {
-      st.mode = "invoice";
       st.cart = [];
 
       const cats = db.categories || [];
 
-      await send(uid,
+      return send(uid,
         "🧾 Invoice Mode",
         kb(cats.map((c, i) => ({
           label: `📁 ${c.name}`,
           value: `inv_cat_${i}`
         })))
-      );
-
-      return res.sendStatus(200);
+      ).then(() => res.sendStatus(200));
     }
 
-    // ================= CATEGORY FIX
+    // ================= CATEGORY
     if (msg.includes("_cat_")) {
       const parts = msg.split("_");
       const mode = parts[0];
@@ -181,15 +187,15 @@ app.post("/webhook", async (req, res) => {
       if (!cat) return res.sendStatus(200);
 
       const items = cat.items.map((it, idx) => ({
-        label: `📄 ${it.item}`,
+        label: `📄 ${it.item} ${it.size || ""}`,
         value: `${mode}_item_${i}_${idx}`
       }));
 
-      await send(uid, `📁 ${cat.name}`, kb(items));
-      return res.sendStatus(200);
+      return send(uid, `📁 ${cat.name}`, kb(items))
+        .then(() => res.sendStatus(200));
     }
 
-    // ================= ITEM FIX
+    // ================= ITEM
     if (msg.includes("_item_")) {
       const parts = msg.split("_");
       const mode = parts[0];
@@ -201,18 +207,22 @@ app.post("/webhook", async (req, res) => {
 
       st.item = item;
 
+      const s1 = Number(item.s1 || 0);
+      const s2 = Number(item.s2 || 0);
+
       if (mode === "price") {
-        await send(uid,
+        return send(uid,
 `📄 ${item.item}
-💰 1S: ${item.s1}
-💰 2S: ${item.s2}`);
-        return res.sendStatus(200);
+📏 ${item.size}
+💰 1S: ${s1}
+💰 2S: ${s2}`)
+        .then(() => res.sendStatus(200));
       }
 
       if (mode === "calc") {
         st.step = "side";
 
-        await send(uid,
+        return send(uid,
 `📄 ${item.item}
 
 🧮 Select Side`,
@@ -220,17 +230,13 @@ app.post("/webhook", async (req, res) => {
             { label: "1️⃣ One Side", value: "side_1" },
             { label: "2️⃣ Two Side", value: "side_2" }
           ])
-        );
-
-        return res.sendStatus(200);
+        ).then(() => res.sendStatus(200));
       }
 
       if (mode === "inv") {
         if (!st.cart) st.cart = [];
-
         st.cart.push(item);
-        await send(uid, "✔ Added");
-        return res.sendStatus(200);
+        return send(uid, "✔ Added").then(() => res.sendStatus(200));
       }
     }
 
@@ -239,39 +245,38 @@ app.post("/webhook", async (req, res) => {
       st.side = msg === "side_2" ? 2 : 1;
       st.step = "qty";
 
-      await send(uid, "📦 Qty:");
-      return res.sendStatus(200);
+      return send(uid, "📦 Qty:").then(() => res.sendStatus(200));
     }
 
     // ================= QTY
     if (st.step === "qty") {
       const qty = Number(msg);
-      if (!qty) return send(uid, "❌ number only");
+      if (!qty) return send(uid, "❌ number only").then(() => res.sendStatus(200));
 
       st.qty = qty;
 
-      const price = st.side === 2 ? st.item.s2 : st.item.s1;
+      const price = Number(st.side === 2 ? st.item.s2 : st.item.s1);
       st.subtotal = price * qty;
 
       st.step = "charge";
 
-      await send(uid, `🧾 Sub: ${st.subtotal}`);
-      return res.sendStatus(200);
+      return send(uid, `🧾 Sub: ${st.subtotal}`)
+        .then(() => res.sendStatus(200));
     }
 
-    // ================= FINAL
+    // ================= FINAL (FIX NaN)
     if (st.step === "charge") {
       const charge = Number(msg || 0);
-      const total = st.subtotal + charge;
+      const total = Number(st.subtotal || 0) + charge;
 
       userState[uid] = {};
 
-      await send(uid, `🔥 TOTAL: ${total} Ks`);
-      return res.sendStatus(200);
+      return send(uid, `🔥 TOTAL: ${total} Ks`)
+        .then(() => res.sendStatus(200));
     }
 
-    await send(uid, "📦 Menu", MAIN_MENU);
-    res.sendStatus(200);
+    return send(uid, "📦 Menu", MAIN_MENU)
+      .then(() => res.sendStatus(200));
 
   } catch (e) {
     console.log("CRASH:", e.message);
@@ -282,5 +287,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 V12 PRO STABLE SYSTEM RUNNING");
+  console.log("🚀 PRO FIXED SYSTEM RUNNING");
 });
