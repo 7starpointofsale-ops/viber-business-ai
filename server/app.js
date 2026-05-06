@@ -9,12 +9,25 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-app.use("/admin", express.static(path.join(__dirname, "../admin")));
+// SPEED FIX 🚀 (CACHE DB)
+let DB_CACHE = null;
+
+function loadDB() {
+  if (!DB_CACHE) {
+    DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  }
+  return DB_CACHE;
+}
+
+// auto reload DB every 10 sec (safe update)
+setInterval(() => {
+  try {
+    DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  } catch (e) {}
+}, 10000);
 
 // =======================
-function loadDB() {
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-}
+app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
 function clean(msg) {
@@ -25,9 +38,10 @@ function clean(msg) {
 }
 
 // =======================
-const userState = {}; // MEMORY
+const userState = {};
 
 // =======================
+// FAST SEND (non-block)
 async function send(userId, text, keyboard = null) {
   const body = {
     receiver: userId,
@@ -37,19 +51,15 @@ async function send(userId, text, keyboard = null) {
 
   if (keyboard) body.keyboard = keyboard;
 
-  try {
-    await axios.post(
-      "https://chatapi.viber.com/pa/send_message",
-      body,
-      {
-        headers: {
-          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
-        }
+  axios.post(
+    "https://chatapi.viber.com/pa/send_message",
+    body,
+    {
+      headers: {
+        "X-Viber-Auth-Token": process.env.VIBER_TOKEN
       }
-    );
-  } catch (e) {
-    console.log("Viber Error:", e.message);
-  }
+    }
+  ).catch(() => {});
 }
 
 // =======================
@@ -71,29 +81,6 @@ const SERVICE_MENU = [
   { label: "💰 ဈေးမေးမယ်", value: "service_price" },
   { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
 ];
-
-// =======================
-function findItemSmart(db, msg) {
-  let best = null;
-  let score = 0;
-
-  db.categories.forEach(c => {
-    c.items.forEach(i => {
-      let s = 0;
-
-      if (msg.includes(i.item.toLowerCase())) s += 3;
-      if (msg.includes((i.size || "").toLowerCase())) s += 2;
-      if (msg.includes(String(i.gsm))) s += 2;
-
-      if (s > score) {
-        score = s;
-        best = i;
-      }
-    });
-  });
-
-  return best;
-}
 
 // =======================
 app.post("/webhook", async (req, res) => {
@@ -118,6 +105,7 @@ app.post("/webhook", async (req, res) => {
       label: `📁 ${c.name}`,
       value: `cat_${i}`
     }));
+
     await send(userId, "📁 Select Category", kb(cats));
     return res.sendStatus(200);
   }
@@ -156,7 +144,7 @@ app.post("/webhook", async (req, res) => {
 
     const state = userState[userId];
 
-    if (state && state.mode === "calc") {
+    if (state?.mode === "calc") {
       userState[userId] = {
         mode: "calc_side",
         item
@@ -165,7 +153,7 @@ app.post("/webhook", async (req, res) => {
       await send(
         userId,
 `📄 ${item.item}
-📏 ${item.size} Size
+📏 ${item.size} A4
 📦 ${item.gsm}g
 
 👉 Side ရွေးပါ`,
@@ -182,8 +170,8 @@ app.post("/webhook", async (req, res) => {
       userId,
 `📄 ${item.item}
 
-📏 Size: ${item.size}
-📦 GSM: ${item.gsm}
+📏 Size: ${item.size} A4
+📦 GSM: ${item.gsm}g
 
 💰 1 side: ${item.s1}
 💰 2 side: ${item.s2}`
@@ -215,7 +203,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  if (userState[userId] && userState[userId].mode === "calc_qty") {
+  if (userState[userId]?.mode === "calc_qty") {
 
     const qty = Number(msg);
     if (!qty) {
@@ -234,7 +222,7 @@ app.post("/webhook", async (req, res) => {
 `🧾 RESULT
 
 📄 ${item.item}
-📏 ${item.size} Size
+📏 ${item.size} A4
 📦 ${item.gsm}g
 🧾 ${state.side} Side
 📦 ${qty} pcs
@@ -254,5 +242,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 FIXED UX FLOW RUNNING");
+  console.log("🚀 FAST + STABLE + FIXED BOT RUNNING");
 });
