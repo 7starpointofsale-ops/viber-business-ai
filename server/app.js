@@ -25,6 +25,9 @@ function clean(msg) {
 }
 
 // =======================
+const userState = {}; // 🔥 MEMORY
+
+// =======================
 async function send(userId, text, keyboard = null) {
   const body = {
     receiver: userId,
@@ -71,7 +74,7 @@ const SERVICE_MENU = [
 ];
 
 // =======================
-// 🔥 AI FIND ITEM
+// AI FIND
 function findItemSmart(db, msg) {
   let best = null;
   let score = 0;
@@ -97,12 +100,10 @@ function findItemSmart(db, msg) {
 // =======================
 // PARSE
 function parseInput(msg) {
-  const size = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
-  const qtyMatch = msg.match(/(\d+)\s*(pcs|pc)?/);
+  const qtyMatch = msg.match(/(\d+)/);
   const side = msg.includes("2") && msg.includes("side") ? 2 : 1;
 
   return {
-    size,
     qty: qtyMatch ? Number(qtyMatch[1]) : 1,
     side
   };
@@ -127,7 +128,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // BUTTON FLOW
+  // 💰 PRICE FLOW
   if (msg === "service_price") {
     const cats = db.categories.map((c, i) => ({
       label: `📁 ${c.name}`,
@@ -137,6 +138,23 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
+  // =======================
+  // 🧮 CALC FLOW START
+  if (msg === "service_calc") {
+
+    userState[userId] = { mode: "calc" };
+
+    const cats = db.categories.map((c, i) => ({
+      label: `📁 ${c.name}`,
+      value: `cat_${i}`
+    }));
+
+    await send(userId, "🧮 Select Category", kb(cats));
+    return res.sendStatus(200);
+  }
+
+  // =======================
+  // CATEGORY
   if (msg.startsWith("cat_")) {
     const index = Number(msg.replace("cat_", ""));
     const category = db.categories[index];
@@ -150,10 +168,35 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
+  // =======================
+  // ITEM CLICK
   if (msg.startsWith("item_")) {
     const parts = msg.split("_");
     const item = db.categories[parts[1]]?.items[parts[2]];
 
+    const state = userState[userId];
+
+    // 🔥 CALC MODE
+    if (state && state.mode === "calc") {
+
+      userState[userId] = {
+        mode: "calc_qty",
+        item
+      };
+
+      await send(
+        userId,
+`📄 ${item.item}
+📏 ${item.size}
+📦 ${item.gsm}
+
+👉 Qty ဘယ်လောက်?`
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // NORMAL
     await send(
       userId,
 `📄 ${item.item}
@@ -169,14 +212,42 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CALCULATOR
-  if (msg === "service_calc") {
-    await send(userId, "🧮 Send: art paper a4 128 2 side 100");
+  // 🔥 QTY INPUT
+  const state = userState[userId];
+
+  if (state && state.mode === "calc_qty") {
+
+    const qty = Number(msg);
+
+    if (!qty) {
+      await send(userId, "❌ Qty number only (eg: 100)");
+      return res.sendStatus(200);
+    }
+
+    const item = state.item;
+
+    const total1 = item.s1 * qty;
+    const total2 = item.s2 * qty;
+
+    await send(
+      userId,
+`🧾 RESULT
+
+📄 ${item.item}
+📏 ${item.size}
+📦 ${item.gsm}
+📦 Qty: ${qty}
+
+💰 1 side = ${total1} Ks
+💰 2 side = ${total2} Ks`
+    );
+
+    delete userState[userId];
     return res.sendStatus(200);
   }
 
   // =======================
-  // 🔥 SMART AI CHAT
+  // 🤖 AI CHAT (DIRECT)
   const item = findItemSmart(db, msg);
 
   if (item) {
@@ -185,11 +256,11 @@ app.post("/webhook", async (req, res) => {
     const price = parsed.side === 2 ? item.s2 : item.s1;
     const total = price * parsed.qty;
 
-    // FULL INFO
-    if (msg.includes(item.item.toLowerCase()) &&
-        msg.includes(item.size.toLowerCase()) &&
-        msg.includes(String(item.gsm))) {
-
+    if (
+      msg.includes(item.item.toLowerCase()) &&
+      msg.includes(item.size.toLowerCase()) &&
+      msg.includes(String(item.gsm))
+    ) {
       await send(
         userId,
 `🧾 RESULT
@@ -206,7 +277,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // PARTIAL → ASK
     await send(
       userId,
 `📄 ${item.item}
@@ -228,5 +298,5 @@ app.post("/webhook", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V15 SMART AI RUNNING");
+  console.log("🚀 V16 FINAL PERFECT FLOW");
 });
