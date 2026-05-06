@@ -32,8 +32,16 @@ function saveDB(data) {
 setInterval(() => (DB_CACHE = null), 5000);
 
 // =======================
-// STATIC ADMIN
-app.use("/admin", express.static(path.join(__dirname, "../admin")));
+// STATIC ADMIN (FIXED)
+const adminPath = path.join(__dirname, "../admin");
+
+app.use("/admin", express.static(adminPath, {
+  index: "index.html"
+}));
+
+app.get("/admin/*", (req, res) => {
+  res.sendFile(path.join(adminPath, "index.html"));
+});
 
 // =======================
 // USER STATE SAFE
@@ -65,7 +73,7 @@ async function send(userId, text, keyboard = null) {
         headers: { "X-Viber-Auth-Token": process.env.VIBER_TOKEN }
       }
     );
-  } catch {}
+  } catch (e) {}
 }
 
 // =======================
@@ -102,16 +110,15 @@ app.post("/webhook", async (req, res) => {
   const db = loadDB();
 
   if (!userState[uid]) userState[uid] = {};
-
   const st = userState[uid];
 
-  // ================= RESET
+  // RESET
   if (["hi", "hello", "menu", "start"].includes(msg)) {
     userState[uid] = {};
     return send(uid, "📦 Main Menu", MAIN_MENU).then(() => res.sendStatus(200));
   }
 
-  // ================= PRICE MODE
+  // PRICE
   if (msg === "price") {
     st.mode = "price";
 
@@ -125,7 +132,7 @@ app.post("/webhook", async (req, res) => {
     );
   }
 
-  // ================= CALC MODE
+  // CALC
   if (msg === "calc") {
     st.mode = "calc";
     st.step = "cat";
@@ -140,7 +147,7 @@ app.post("/webhook", async (req, res) => {
     );
   }
 
-  // ================= INVOICE MODE
+  // INVOICE
   if (msg === "invoice") {
     st.mode = "invoice";
     st.step = "cat";
@@ -156,7 +163,7 @@ app.post("/webhook", async (req, res) => {
     );
   }
 
-  // ================= CATEGORY
+  // CATEGORY
   if (msg.includes("_cat_")) {
     const [mode, , i] = msg.split("_");
     const cat = db.categories[i];
@@ -174,7 +181,7 @@ app.post("/webhook", async (req, res) => {
     );
   }
 
-  // ================= ITEM SELECT
+  // ITEM
   if (msg.includes("_item_")) {
     const [mode, , ci, ii] = msg.split("_");
     const item = db.categories[ci]?.items[ii];
@@ -182,23 +189,19 @@ app.post("/webhook", async (req, res) => {
 
     st.item = item;
 
-    // ================= PRICE MODE
     if (mode === "price") {
-      return send(
-        uid,
-        `📄 ${item.item}
+      return send(uid,
+`📄 ${item.item}
 📏 ${item.size}
 💰 1S: ${item.s1}
 💰 2S: ${item.s2}`
       ).then(() => res.sendStatus(200));
     }
 
-    // ================= CALC MODE
     if (mode === "calc") {
       st.step = "side";
 
-      return send(
-        uid,
+      return send(uid,
 `📄 ${item.item}
 📏 ${item.size}
 
@@ -210,23 +213,21 @@ app.post("/webhook", async (req, res) => {
       ).then(() => res.sendStatus(200));
     }
 
-    // ================= INVOICE MODE
     if (mode === "inv") {
       st.cart.push({
         name: item.item,
         size: item.size,
         price: item.s1,
-        qty: 1,
-        total: item.s1
+        qty: 1
       });
 
-      return send(uid, "✔ Added\n📦 Add more or type menu").then(() =>
+      return send(uid, "✔ Added to Invoice").then(() =>
         res.sendStatus(200)
       );
     }
   }
 
-  // ================= SIDE
+  // SIDE
   if (msg === "side_1" || msg === "side_2") {
     if (!st.item) return res.sendStatus(200);
 
@@ -236,7 +237,7 @@ app.post("/webhook", async (req, res) => {
     return send(uid, "📦 Enter Qty:").then(() => res.sendStatus(200));
   }
 
-  // ================= QTY
+  // QTY
   if (st.step === "qty") {
     const qty = Number(msg);
     if (!qty) return send(uid, "❌ number only").then(() => res.sendStatus(200));
@@ -248,48 +249,40 @@ app.post("/webhook", async (req, res) => {
 
     st.step = "charge";
 
-    return send(
-      uid,
+    return send(uid,
 `🧾 RESULT
-
 📄 ${st.item.item}
 📦 Qty: ${qty}
 💰 Sub: ${st.subtotal}
 
-➕ Extra Charge? (0 if none)`
+➕ Charge?`
     ).then(() => res.sendStatus(200));
   }
 
-  // ================= FINAL
+  // FINAL
   if (st.step === "charge") {
     const charge = Number(msg || 0);
-
     const total = st.subtotal + charge;
 
-    const result = `
-🧾 FINAL INVOICE
+    userState[uid] = {};
+
+    return send(uid,
+`🧾 FINAL
 
 📄 ${st.item.item}
 📦 Qty: ${st.qty}
-
 💰 Sub: ${st.subtotal}
 ➕ Charge: ${charge}
 
-🔥 TOTAL: ${total} Ks
-`;
-
-    // reset
-    userState[uid] = {};
-
-    return send(uid, result).then(() => res.sendStatus(200));
+🔥 TOTAL: ${total} Ks`
+    ).then(() => res.sendStatus(200));
   }
 
-  // ================= FALLBACK
   return send(uid, "📦 Menu", MAIN_MENU).then(() => res.sendStatus(200));
 });
 
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 STABLE V10 ALL-IN-ONE SYSTEM RUNNING");
+  console.log("🚀 STABLE V10 FIXED SYSTEM RUNNING");
 });
