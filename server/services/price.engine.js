@@ -4,13 +4,17 @@ const path = require("path");
 const DB_PATH = path.join(__dirname, "../../database/price.db.json");
 
 // =======================
-// LOAD DB
+// LOAD DB (SAFE)
 function loadDB() {
-  return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  try {
+    return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  } catch (e) {
+    return { categories: [] };
+  }
 }
 
 // =======================
-// NORMALIZE (Myanmar + typo fix)
+// NORMALIZE
 function normalize(msg = "") {
   return msg
     .toLowerCase()
@@ -29,40 +33,33 @@ function normalize(msg = "") {
 }
 
 // =======================
-// FIND ITEM (SAFE + OLD SUPPORT)
+// FIND ITEM (ROBUST)
 function findItem(msg) {
   const db = loadDB();
   msg = normalize(msg);
 
-  let found = null;
+  for (const c of db.categories) {
+    for (const i of c.items) {
+      const name = (i.item || "").toLowerCase();
 
-  db.categories.forEach(c => {
-    c.items.forEach(i => {
-
-      const name = (i.item || i.name || "").toLowerCase();
-
-      if (
-        msg.includes(name) ||
-        name.includes(msg.split(" ")[0])
-      ) {
-        found = {
-          item: i.item || i.name,
-          s1: i.s1 || i.price || 0,
-          s2: i.s2 || i.price2 || 0
+      if (msg.includes(name)) {
+        return {
+          item: i.item,
+          s1: Number(i.s1 || 0),
+          s2: Number(i.s2 || 0),
+          size: i.size,
+          gsm: i.gsm
         };
       }
+    }
+  }
 
-    });
-  });
-
-  return found;
+  return null;
 }
 
 // =======================
 // SIZE EXTRACT
 function extractSize(msg) {
-  msg = normalize(msg);
-
   const m = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
   if (!m) return null;
 
@@ -73,27 +70,24 @@ function extractSize(msg) {
 }
 
 // =======================
-// QTY (1 / ၁ support)
+// QTY
 function extractQty(msg) {
-  msg = normalize(msg);
   const m = msg.match(/(\d+)/);
   return m ? Number(m[1]) : 1;
 }
 
 // =======================
-// MAIN PARSER (SAFE)
+
 function parseMessage(msg) {
-  msg = normalize(msg);
-
-  const item = findItem(msg);
-  const size = extractSize(msg);
-  const qty = extractQty(msg);
-
   return {
-    item,
-    size,
-    qty
+    item: findItem(msg),
+    size: extractSize(msg),
+    qty: extractQty(msg)
   };
 }
 
-module.exports = { parseMessage };
+module.exports = {
+  loadDB,
+  findItem,
+  parseMessage
+};

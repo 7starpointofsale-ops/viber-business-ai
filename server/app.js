@@ -29,7 +29,6 @@ setInterval(() => {
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
-// CLEAN INPUT
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
@@ -42,13 +41,7 @@ function clean(msg) {
 // =======================
 function formatSize(size) {
   if (!size) return "";
-  let s = String(size).trim().replace(/\s+/g, " ");
-  let parts = s.split(" ");
-  let result = [];
-  for (let p of parts) {
-    if (result[result.length - 1] !== p) result.push(p);
-  }
-  return result.join(" ");
+  return String(size).replace(/\s+/g, " ").trim();
 }
 
 // =======================
@@ -56,11 +49,7 @@ const userState = {};
 
 // =======================
 async function send(userId, text, keyboard = null) {
-  const body = {
-    receiver: userId,
-    type: "text",
-    text
-  };
+  const body = { receiver: userId, type: "text", text };
 
   if (keyboard) body.keyboard = keyboard;
 
@@ -114,7 +103,8 @@ app.post("/webhook", async (req, res) => {
 
   // =======================
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
-    userState[userId] = {};
+    userState[userId] = { mode: null };
+
     await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
     return res.sendStatus(200);
   }
@@ -132,7 +122,7 @@ app.post("/webhook", async (req, res) => {
 
   // =======================
   if (msg === "service_calc") {
-    userState[userId] = { mode: "calc" };
+    userState[userId] = { mode: "calc", item: null, qty: 1 };
 
     const cats = db.categories.map((c, i) => ({
       label: `📁 ${c.name}`,
@@ -145,12 +135,12 @@ app.post("/webhook", async (req, res) => {
 
   // =======================
   if (msg.startsWith("cat_")) {
-    const i = Number(msg.replace("cat_", ""));
+    const i = Number(msg.split("_")[1]);
     const cat = db.categories[i];
     if (!cat) return res.sendStatus(200);
 
     const items = cat.items.map((it, idx) => ({
-      label: `📄 ${it.item} ${it.size} ${it.gsm}`,
+      label: `📄 ${it.item} ${it.size}`,
       value: `item_${i}_${idx}`
     }));
 
@@ -165,22 +155,22 @@ app.post("/webhook", async (req, res) => {
     if (!item) return res.sendStatus(200);
 
     const state = userState[userId] || {};
+    userState[userId] = { ...state, item };
+
     const sizeText = formatSize(item.size);
 
-    // ⭐ IMPORTANT FIX: ALWAYS SAVE ITEM
-    userState[userId] = {
-      ...state,
-      item
-    };
-
+    // CALC MODE
     if (state.mode === "calc") {
+      userState[userId].step = "side";
+
       await send(
         userId,
 `📄 ${item.item}
 📏 ${sizeText}
-📦 ${item.gsm}g
+📦 ${item.gsm}
 
-🧮 Choose mode`,
+🧮 Select Side`
+        ,
         sideKb()
       );
       return res.sendStatus(200);
@@ -190,35 +180,48 @@ app.post("/webhook", async (req, res) => {
       userId,
 `📄 ${item.item}
 📏 ${sizeText}
-📦 ${item.gsm}g
+📦 ${item.gsm}
 
-💰 1 side: ${item.s1}
-💰 2 side: ${item.s2}
-
-👉 Press "ဈေးတွက်မယ်" for calculation`
+👉 Use "ဈေးတွက်မယ်"`
     );
 
     return res.sendStatus(200);
   }
 
   // =======================
-  // SIDE SELECT (CUSTOM FLOW)
   if (msg === "side_1" || msg === "side_2") {
     const state = userState[userId];
     if (!state?.item) return res.sendStatus(200);
 
     const side = msg === "side_2" ? 2 : 1;
-    const qty = state.qty || 1;
 
-    const price = side === 2 ? state.item.s2 : state.item.s1;
+    userState[userId].side = side;
+    userState[userId].step = "qty";
+
+    await send(userId, "📦 Enter Qty:");
+    return res.sendStatus(200);
+  }
+
+  // =======================
+  // QTY INPUT (FIXED FLOW)
+  if (userState[userId]?.step === "qty") {
+    const qty = Number(msg);
+    if (!qty) {
+      await send(userId, "❌ number only");
+      return res.sendStatus(200);
+    }
+
+    const state = userState[userId];
+
+    const price = state.side === 2 ? state.item.s2 : state.item.s1;
     const total = price * qty;
 
     await send(userId,
 `🧾 RESULT
 
 📄 ${state.item.item}
+🧾 ${state.side} Side
 📦 ${qty} pcs
-🧾 ${side} Side
 
 💰 Total: ${total} Ks`
     );
@@ -228,34 +231,11 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // MANUAL QTY INPUT
-  if (stateMode(userState[userId], "custom_qty")) {
-    const qty = Number(msg);
-
-    if (!qty) {
-      await send(userId, "❌ number only");
-      return res.sendStatus(200);
-    }
-
-    userState[userId].qty = qty;
-    userState[userId].mode = "custom_side";
-
-    await send(userId, "🧾 Select Side", sideKb());
-    return res.sendStatus(200);
-  }
-
-  function stateMode(state, m) {
-    return state?.mode === m;
-  }
-
-  // =======================
-  // FALLBACK
   await send(userId, "📦 Select Service", kb(SERVICE_MENU));
   res.sendStatus(200);
 });
 
-// =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 STABLE FIXED BOT RUNNING");
+  console.log("🚀 STABLE V2 POS BOT RUNNING");
 });
