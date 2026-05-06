@@ -25,7 +25,7 @@ function clean(msg) {
 }
 
 // =======================
-const userState = {}; // memory
+const userState = {};
 
 // =======================
 async function send(userId, text, keyboard = null) {
@@ -53,7 +53,6 @@ async function send(userId, text, keyboard = null) {
 }
 
 // =======================
-// keyboard
 function kb(items) {
   return {
     Type: "keyboard",
@@ -74,7 +73,14 @@ const SERVICE_MENU = [
 ];
 
 // =======================
-// 🔥 FIXED SMART FIND (strong matching)
+// SAFE INPUT CHECK
+const ignoreMsgs = [".", "home", "back", "menu", "start"];
+
+function isNumber(msg) {
+  return /^\d+$/.test(msg);
+}
+
+// =======================
 function findItemSmart(db, msg) {
   let best = null;
   let score = 0;
@@ -86,14 +92,13 @@ function findItemSmart(db, msg) {
 
       let s = 0;
 
-      const itemName = (i.item || "").toLowerCase();
+      const name = (i.item || "").toLowerCase();
       const size = (i.size || "").toLowerCase();
       const gsm = String(i.gsm || "");
 
-      // strong match rules
       tokens.forEach(t => {
-        if (itemName.includes(t)) s += 2;
-        if (size === t) s += 5;     // exact size priority
+        if (name.includes(t)) s += 2;
+        if (size === t) s += 5;
         if (gsm === t) s += 4;
       });
 
@@ -118,6 +123,16 @@ app.post("/webhook", async (req, res) => {
 
   const db = loadDB();
 
+  const state = userState[userId];
+
+  // =======================
+  // GLOBAL RESET COMMAND
+  if (ignoreMsgs.includes(msg)) {
+    delete userState[userId];
+    await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
+    return res.sendStatus(200);
+  }
+
   // =======================
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
     await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
@@ -136,7 +151,6 @@ app.post("/webhook", async (req, res) => {
 
   // =======================
   if (msg === "service_calc") {
-
     userState[userId] = { mode: "calc" };
 
     const cats = db.categories.map((c, i) => ({
@@ -167,64 +181,54 @@ app.post("/webhook", async (req, res) => {
     const parts = msg.split("_");
     const item = db.categories[parts[1]]?.items[parts[2]];
 
-    const state = userState[userId];
-
-    if (state && state.mode === "calc") {
-
+    if (state?.mode === "calc") {
       userState[userId] = {
         mode: "calc_qty",
         item
       };
 
-      await send(
-        userId,
+      await send(userId,
 `📄 ${item.item}
 📏 ${item.size}
 📦 ${item.gsm}
 
-👉 Qty ဘယ်လောက်?`
-      );
+👉 Qty ဘယ်လောက်?`);
 
       return res.sendStatus(200);
     }
 
-    await send(
-      userId,
+    await send(userId,
 `📄 ${item.item}
 
 📏 Size: ${item.size}
 📦 GSM: ${item.gsm}
 
 💰 1 side: ${item.s1}
-💰 2 side: ${item.s2}`
-    );
+💰 2 side: ${item.s2}`);
 
     return res.sendStatus(200);
   }
 
   // =======================
-  // STEP 1: QTY
-  if (userState[userId]?.mode === "calc_qty") {
+  // QTY STEP
+  if (state?.mode === "calc_qty") {
 
-    const qty = Number(msg);
-
-    if (!qty) {
-      await send(userId, "❌ Qty number only (eg: 100)");
+    if (!isNumber(msg)) {
+      await send(userId, "❌ Number only (eg: 100)");
       return res.sendStatus(200);
     }
 
     userState[userId] = {
       mode: "calc_side",
-      item: userState[userId].item,
-      qty
+      item: state.item,
+      qty: Number(msg)
     };
 
-    await send(
-      userId,
+    await send(userId,
 `🧾 Select Side
 
-📦 Qty: ${qty}`
-    , kb([
+📦 Qty: ${msg}`,
+kb([
       { label: "1️⃣ 1 Side", value: "side_1" },
       { label: "2️⃣ 2 Side", value: "side_2" }
     ]));
@@ -233,10 +237,9 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // STEP 2: SIDE
+  // SIDE STEP
   if (msg === "side_1" || msg === "side_2") {
 
-    const state = userState[userId];
     if (!state || state.mode !== "calc_side") return res.sendStatus(200);
 
     const item = state.item;
@@ -247,8 +250,7 @@ app.post("/webhook", async (req, res) => {
 
     const total = price * qty;
 
-    await send(
-      userId,
+    await send(userId,
 `🧾 RESULT
 
 📄 ${item.item}
@@ -257,30 +259,28 @@ app.post("/webhook", async (req, res) => {
 🧾 ${side} Side
 📦 Qty: ${qty}
 
-💰 Total: ${total} Ks`
-    );
+💰 Total: ${total} Ks`);
 
     delete userState[userId];
     return res.sendStatus(200);
   }
 
   // =======================
-  // AI fallback
-  const item = findItemSmart(db, msg);
+  // AI ONLY WHEN NO STATE
+  if (!state) {
+    const item = findItemSmart(db, msg);
 
-  if (item) {
-
-    await send(
-      userId,
+    if (item) {
+      await send(userId,
 `📄 ${item.item}
 
 📏 ${item.size}
 📦 ${item.gsm}
 
-👉 Qty + Side လိုပါသေးတယ်`
-    );
+👉 Qty + Side လိုပါတယ်`);
 
-    return res.sendStatus(200);
+      return res.sendStatus(200);
+    }
   }
 
   // =======================
@@ -288,9 +288,8 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// =======================
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 FIXED UX + SMART MATCH VERSION RUNNING");
+  console.log("🚀 STABLE STATE MACHINE VERSION RUNNING");
 });
