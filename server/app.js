@@ -13,6 +13,13 @@ const DB_PATH = path.join(__dirname, "../database/price.db.json");
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
+// HOME
+// =======================
+app.get("/", (req, res) => {
+  res.send("🚀 7Star System Running");
+});
+
+// =======================
 // GET DB
 // =======================
 app.get("/api/prices", (req, res) => {
@@ -21,12 +28,16 @@ app.get("/api/prices", (req, res) => {
 });
 
 // =======================
-// SAVE (CREATE / ADD)
+// SAVE
 // =======================
 app.post("/api/save-v2", (req, res) => {
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
 
   const { category, item, size, paper, side, price } = req.body;
+
+  if (!category || !item) {
+    return res.json({ ok: false });
+  }
 
   let cat = db.categories.find(c => c.name === category);
 
@@ -38,21 +49,21 @@ app.post("/api/save-v2", (req, res) => {
   let it = cat.items.find(i => i.name === item);
 
   if (!it) {
-    it = { id: Date.now().toString(), name: item, entries: [] };
+    it = { name: item, entries: [] };
     cat.items.push(it);
   }
 
   if (!it.entries) it.entries = [];
 
   it.entries.push({
-    id: Date.now().toString() + Math.random(),
-    size,
-    gsm: paper,
-    side,
-    price: Number(price)
+    id: Date.now().toString(),
+    size: size || "-",
+    gsm: paper || "-",
+    side: side || "-",
+    price: Number(price || 0)
   });
 
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf-8");
 
   res.json({ ok: true });
 });
@@ -119,5 +130,5 @@ app.post("/api/delete-category", (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 FULL SYSTEM RUNNING");
+  console.log("🚀 CLEAN SYSTEM RUNNING");
 });
