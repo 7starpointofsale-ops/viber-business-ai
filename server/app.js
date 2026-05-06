@@ -21,13 +21,6 @@ function loadDB() {
 }
 
 // =======================
-// SAVE DB
-// =======================
-function saveDB(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-}
-
-// =======================
 // VIBER SEND
 // =======================
 async function send(userId, text, keyboard = null) {
@@ -55,11 +48,21 @@ async function send(userId, text, keyboard = null) {
 }
 
 // =======================
-// SIMPLE SESSION (RAM)
+// CLEAN INPUT (FIX ALL BUGS)
+// =======================
+function clean(msg) {
+  return (msg || "")
+    .replace(/[📁📄💰🧮📦]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+// =======================
+// SESSION (simple RAM)
 const session = {};
 
 // =======================
-// KEYBOARD BUILDER (GRID STYLE)
+// KEYBOARD BUILDER
 function kb(items) {
   return {
     Type: "keyboard",
@@ -75,7 +78,7 @@ function kb(items) {
 }
 
 // =======================
-// SERVICE MENU (FIRST SCREEN)
+// SERVICE MENU
 const SERVICE_MENU = [
   { label: "💰 ဈေးမေးမယ်", value: "service_price" },
   { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" },
@@ -90,14 +93,15 @@ app.post("/webhook", async (req, res) => {
   if (body.event !== "message") return res.sendStatus(200);
 
   const userId = body.sender.id;
-  const msg = (body.message.text || "").toLowerCase().trim();
+  const rawMsg = body.message.text;
+  const msg = clean(rawMsg);
 
   const db = loadDB();
 
   // =======================
-  // START / SERVICE BOX
+  // START MENU
   // =======================
-  if (["hi", "hello", "menu"].includes(msg)) {
+  if (["hi", "hello", "menu", "start"].includes(msg)) {
 
     session[userId] = { step: "service" };
 
@@ -113,7 +117,7 @@ app.post("/webhook", async (req, res) => {
   // =======================
   // SERVICE SELECT
   // =======================
-  if (msg === "service_price") {
+  if (msg.includes("ဈေးမေးမယ်") || msg === "service_price") {
 
     session[userId] = { step: "category" };
 
@@ -126,25 +130,28 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  if (msg === "service_calc") {
+  if (msg.includes("ဈေးတွက်မယ်") || msg === "service_calc") {
     session[userId] = { step: "calc" };
     await send(userId, "🧮 Send formula (eg: 2+2)");
     return res.sendStatus(200);
   }
 
-  if (msg === "service_order") {
+  if (msg.includes("order") || msg === "service_order") {
     session[userId] = { step: "order" };
     await send(userId, "📦 Order system coming soon");
     return res.sendStatus(200);
   }
 
   // =======================
-  // CATEGORY CLICK
+  // CATEGORY CLICK (FIXED SAFE MATCH)
   // =======================
-  if (msg.startsWith("cat_")) {
+  if (msg.startsWith("cat_") || msg.includes("digital press") || msg.includes("vinyl")) {
 
-    const catName = msg.replace("cat_", "");
-    const cat = db.categories.find(c => c.name === catName);
+    let catName = msg.replace("cat_", "");
+
+    const cat = db.categories.find(c =>
+      c.name.toLowerCase() === catName.toLowerCase()
+    );
 
     if (!cat) {
       await send(userId, "❌ Category not found");
@@ -161,7 +168,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // ITEM CLICK
+  // ITEM CLICK (SAFE ID MATCH)
   // =======================
   if (msg.startsWith("item_")) {
 
@@ -196,7 +203,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CALC ENGINE
+  // CALCULATOR
   // =======================
   if (/^[0-9+\-*/().\s]+$/.test(msg)) {
     try {
@@ -207,7 +214,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // SMART SIZE CALC
+  // SIZE CALC
   // =======================
   const size = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
   const qty = msg.match(/(\d+)$/);
@@ -224,14 +231,15 @@ app.post("/webhook", async (req, res) => {
 📦 Qty: ${q}
 🧮 Area: ${area}
 
-💡 (pricing engine next upgrade)`
+💡 pricing engine next`
     );
 
     return res.sendStatus(200);
   }
 
   // =======================
-  // DEFAULT → SERVICE BOX AGAIN
+  // DEFAULT MENU (SAFE)
+  // =======================
   await send(
     userId,
     "📦 Select Service",
@@ -245,5 +253,5 @@ app.post("/webhook", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V11 FULL STABLE SYSTEM RUNNING");
+  console.log("🚀 V12 STABLE FULL SYSTEM RUNNING");
 });
