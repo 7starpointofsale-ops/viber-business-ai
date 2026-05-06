@@ -29,6 +29,7 @@ setInterval(() => {
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
+// CLEAN INPUT
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
@@ -37,9 +38,27 @@ function clean(msg) {
 }
 
 // =======================
+// 🔥 FIX A4 A4 + DUPLICATE WORDS
 function formatSize(size) {
   if (!size) return "";
-  return String(size).toLowerCase().includes("a4") ? "A4" : size;
+
+  let s = String(size).trim();
+
+  // normalize multiple spaces
+  s = s.replace(/\s+/g, " ");
+
+  // split words
+  let parts = s.split(" ");
+
+  // remove duplicate consecutive words (A4 A4 fix)
+  let result = [];
+  for (let p of parts) {
+    if (result[result.length - 1] !== p) {
+      result.push(p);
+    }
+  }
+
+  return result.join(" ");
 }
 
 // =======================
@@ -88,8 +107,7 @@ const SERVICE_MENU = [
 ];
 
 // =======================
-// 🔥 QUICK BUTTON (FAST POS MODE)
-function quickKb(item) {
+function quickKb() {
   return kb([
     { label: "1️⃣ 1S 50", value: "q_1_50" },
     { label: "2️⃣ 1S 100", value: "q_1_100" },
@@ -145,6 +163,8 @@ app.post("/webhook", async (req, res) => {
     const index = Number(msg.replace("cat_", ""));
     const category = db.categories[index];
 
+    if (!category) return res.sendStatus(200);
+
     const items = category.items.map((i, idx) => ({
       label: `📄 ${i.item} ${i.size} ${i.gsm}`,
       value: `item_${index}_${idx}`
@@ -159,11 +179,11 @@ app.post("/webhook", async (req, res) => {
     const parts = msg.split("_");
     const item = db.categories[parts[1]]?.items[parts[2]];
 
-    const state = userState[userId];
+    if (!item) return res.sendStatus(200);
 
+    const state = userState[userId];
     const sizeText = formatSize(item.size);
 
-    // 🔥 QUICK MODE ENTRY
     if (state?.mode === "calc") {
       userState[userId] = {
         mode: "quick",
@@ -177,7 +197,7 @@ app.post("/webhook", async (req, res) => {
 📦 ${item.gsm}g
 
 📦 Quick Select (1 tap fast)`,
-        quickKb(item)
+        quickKb()
       );
 
       return res.sendStatus(200);
@@ -198,22 +218,22 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // 🔥 QUICK RESULT HANDLER
+  // QUICK MODE
   if (msg.startsWith("q_")) {
     const state = userState[userId];
     if (!state?.item) return res.sendStatus(200);
 
-    const parts = msg.split("_");
-
-    // CUSTOM MODE
     if (msg === "q_custom") {
       userState[userId].mode = "custom_qty";
       await send(userId, "📦 Enter Qty:");
       return res.sendStatus(200);
     }
 
+    const parts = msg.split("_");
     const side = Number(parts[1]);
     const qty = Number(parts[2]);
+
+    if (!qty) return send(userId, "❌ number only");
 
     const price = side === 2 ? state.item.s2 : state.item.s1;
     const total = price * qty;
@@ -238,21 +258,25 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CUSTOM QTY FLOW
+  // CUSTOM QTY SAFE MODE
   if (userState[userId]?.mode === "custom_qty") {
     const qty = Number(msg);
-    if (!qty) return send(userId, "❌ number only");
+
+    if (!qty) {
+      if (msg === "back") {
+        delete userState[userId];
+        await send(userId, "📦 Select again");
+        return res.sendStatus(200);
+      }
+
+      await send(userId, "❌ number only");
+      return res.sendStatus(200);
+    }
 
     userState[userId].qty = qty;
     userState[userId].mode = "custom_side";
 
-    await send(userId,
-`🧾 Select Side
-
-1️⃣ One Side
-2️⃣ Two Side`
-    );
-
+    await send(userId, "🧾 Select Side\n1️⃣ One Side\n2️⃣ Two Side");
     return res.sendStatus(200);
   }
 
@@ -293,5 +317,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 QUICK MODE + POS UX BOT RUNNING");
+  console.log("🚀 FIXED STABLE BOT RUNNING");
 });
