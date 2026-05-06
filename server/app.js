@@ -25,7 +25,7 @@ function clean(msg) {
 }
 
 // =======================
-const userState = {}; // 🔥 MEMORY
+const userState = {}; // MEMORY
 
 // =======================
 async function send(userId, text, keyboard = null) {
@@ -53,7 +53,6 @@ async function send(userId, text, keyboard = null) {
 }
 
 // =======================
-// GRID UI
 function kb(items) {
   return {
     Type: "keyboard",
@@ -74,7 +73,7 @@ const SERVICE_MENU = [
 ];
 
 // =======================
-// AI FIND
+// FIND ITEM
 function findItemSmart(db, msg) {
   let best = null;
   let score = 0;
@@ -98,18 +97,6 @@ function findItemSmart(db, msg) {
 }
 
 // =======================
-// PARSE
-function parseInput(msg) {
-  const qtyMatch = msg.match(/(\d+)/);
-  const side = msg.includes("2") && msg.includes("side") ? 2 : 1;
-
-  return {
-    qty: qtyMatch ? Number(qtyMatch[1]) : 1,
-    side
-  };
-}
-
-// =======================
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.event !== "message") return res.sendStatus(200);
@@ -128,7 +115,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // 💰 PRICE FLOW
+  // PRICE MODE
   if (msg === "service_price") {
     const cats = db.categories.map((c, i) => ({
       label: `📁 ${c.name}`,
@@ -139,9 +126,8 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // 🧮 CALC FLOW START
+  // CALC MODE START
   if (msg === "service_calc") {
-
     userState[userId] = { mode: "calc" };
 
     const cats = db.categories.map((c, i) => ({
@@ -176,13 +162,19 @@ app.post("/webhook", async (req, res) => {
 
     const state = userState[userId];
 
-    // 🔥 CALC MODE
+    // =======================
+    // CALC FLOW → STEP 1 (SELECT ITEM)
     if (state && state.mode === "calc") {
 
       userState[userId] = {
-        mode: "calc_qty",
+        mode: "calc_side",
         item
       };
+
+      const sideKb = kb([
+        { label: "1️⃣ One Side", value: "side_1" },
+        { label: "2️⃣ Two Side", value: "side_2" }
+      ]);
 
       await send(
         userId,
@@ -190,13 +182,15 @@ app.post("/webhook", async (req, res) => {
 📏 ${item.size}
 📦 ${item.gsm}
 
-👉 Qty ဘယ်လောက်?`
+👉 Side ရွေးပါ`,
+        sideKb
       );
 
       return res.sendStatus(200);
     }
 
-    // NORMAL
+    // =======================
+    // NORMAL PRICE VIEW
     await send(
       userId,
 `📄 ${item.item}
@@ -212,22 +206,43 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // 🔥 QTY INPUT
-  const state = userState[userId];
+  // SIDE SELECT
+  if (msg.startsWith("side_")) {
+    const state = userState[userId];
+    if (!state || state.mode !== "calc_side") return res.sendStatus(200);
 
-  if (state && state.mode === "calc_qty") {
+    const side = Number(msg.replace("side_", ""));
+
+    userState[userId] = {
+      mode: "calc_qty",
+      item: state.item,
+      side
+    };
+
+    await send(
+      userId,
+`📄 ${state.item.item}
+📦 Qty ဘယ်လောက်?`
+    );
+
+    return res.sendStatus(200);
+  }
+
+  // =======================
+  // QTY INPUT
+  if (userState[userId] && userState[userId].mode === "calc_qty") {
 
     const qty = Number(msg);
-
     if (!qty) {
       await send(userId, "❌ Qty number only (eg: 100)");
       return res.sendStatus(200);
     }
 
+    const state = userState[userId];
     const item = state.item;
 
-    const total1 = item.s1 * qty;
-    const total2 = item.s2 * qty;
+    const price = state.side === 2 ? item.s2 : item.s1;
+    const total = price * qty;
 
     await send(
       userId,
@@ -236,56 +251,13 @@ app.post("/webhook", async (req, res) => {
 📄 ${item.item}
 📏 ${item.size}
 📦 ${item.gsm}
+🧾 ${state.side} Side
 📦 Qty: ${qty}
 
-💰 1 side = ${total1} Ks
-💰 2 side = ${total2} Ks`
+💰 Total: ${total} Ks`
     );
 
     delete userState[userId];
-    return res.sendStatus(200);
-  }
-
-  // =======================
-  // 🤖 AI CHAT (DIRECT)
-  const item = findItemSmart(db, msg);
-
-  if (item) {
-    const parsed = parseInput(msg);
-
-    const price = parsed.side === 2 ? item.s2 : item.s1;
-    const total = price * parsed.qty;
-
-    if (
-      msg.includes(item.item.toLowerCase()) &&
-      msg.includes(item.size.toLowerCase()) &&
-      msg.includes(String(item.gsm))
-    ) {
-      await send(
-        userId,
-`🧾 RESULT
-
-📄 ${item.item}
-📏 ${item.size}
-📦 ${item.gsm}
-🧾 ${parsed.side} side
-📦 Qty: ${parsed.qty}
-
-💰 Total: ${total} Ks`
-      );
-
-      return res.sendStatus(200);
-    }
-
-    await send(
-      userId,
-`📄 ${item.item}
-
-📏 Size?
-📦 GSM?
-🧾 1 side / 2 side?`
-    );
-
     return res.sendStatus(200);
   }
 
@@ -296,7 +268,6 @@ app.post("/webhook", async (req, res) => {
 
 // =======================
 const PORT = process.env.PORT || 10000;
-
 app.listen(PORT, () => {
-  console.log("🚀 V16 FINAL PERFECT FLOW");
+  console.log("🚀 FIXED UX FLOW RUNNING");
 });
