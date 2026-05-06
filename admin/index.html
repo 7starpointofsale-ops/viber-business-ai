@@ -1,32 +1,73 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>7Star Admin v3</title>
+  <title>7Star Admin v4</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .box {
+      background: white;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    input, select {
+      padding: 8px;
+      margin: 5px;
+      width: 200px;
+    }
+
+    button {
+      padding: 8px 12px;
+      margin: 5px;
+      cursor: pointer;
+    }
+
+    .cat {
+      font-weight: bold;
+      margin-top: 10px;
+      color: #333;
+    }
+
+    .item {
+      margin-left: 15px;
+    }
+
+    .row {
+      margin-left: 20px;
+    }
+  </style>
 </head>
 <body>
 
-<h2>📦 7Star PRICE CONTROL</h2>
+<h2>📦 7Star PRICE CONTROL (v4)</h2>
 
-<hr>
+<div class="box">
 
-<!-- CATEGORY -->
-<select id="category"></select>
-<input id="newCategory" placeholder="➕ new category">
+  <select id="category"></select>
+  <input id="newCategory" placeholder="new category">
 
-<hr>
+  <br>
 
-<!-- ITEM -->
-<input id="item" placeholder="item name"><br><br>
-<input id="size" placeholder="size (optional eg. 3x6)"><br><br>
-<input id="paper" placeholder="gsm (eg. 250)"><br><br>
-<input id="side" placeholder="side (1/2)"><br><br>
-<input id="price" placeholder="price"><br><br>
+  <input id="item" placeholder="item name">
+  <input id="size" placeholder="size (3x6)">
+  <input id="paper" placeholder="gsm (250)">
+  <input id="side" placeholder="side">
+  <input id="price" placeholder="price">
 
-<button onclick="save()">💾 Save</button>
-<button onclick="deleteCategory()">🗑 Delete Category</button>
-<button onclick="deleteSelected()">❌ Delete Items</button>
+  <br>
 
-<hr>
+  <button onclick="save()">💾 Save</button>
+  <button onclick="deleteCategory()">🗑 Delete Category</button>
+  <button onclick="deleteSelected()">❌ Delete Items</button>
+
+</div>
 
 <div id="list"></div>
 

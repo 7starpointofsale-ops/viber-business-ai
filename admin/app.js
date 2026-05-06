@@ -22,13 +22,14 @@ function renderCategory() {
 }
 
 // =======================
-// SAVE (FIXED + ADD CATEGORY SUPPORT)
+// SAVE (FIXED SYNC)
 // =======================
 async function save() {
   let cat = newCategory.value.trim() || category.value;
 
   if (!cat || !item.value || !price.value) {
-    return alert("Fill required fields");
+    alert("Fill required fields");
+    return;
   }
 
   await fetch('/api/save-v2', {
@@ -51,7 +52,7 @@ async function save() {
   side.value = "";
   price.value = "";
 
-  load();
+  await load(); // 🔥 IMPORTANT FIX
 }
 
 // =======================
@@ -68,11 +69,9 @@ async function deleteCategory() {
     body: JSON.stringify({ category: category.value })
   });
 
-  load();
+  await load(); // 🔥 FIX
 }
 
-// =======================
-// DELETE ITEMS
 // =======================
 async function deleteSelected() {
   const ids = [...document.querySelectorAll("input[type=checkbox]:checked")]
@@ -86,11 +85,11 @@ async function deleteSelected() {
     body: JSON.stringify({ ids })
   });
 
-  load();
+  await load(); // 🔥 FIX
 }
 
 // =======================
-// RENDER LIST (CLEAN UI)
+// RENDER (PREMIUM UI FIX)
 // =======================
 function renderList() {
   list.innerHTML = "";
@@ -98,28 +97,24 @@ function renderList() {
   db.categories.forEach(cat => {
 
     let box = document.createElement("div");
-    box.style.border = "1px solid #ccc";
-    box.style.margin = "10px";
-    box.style.padding = "10px";
+    box.className = "box";
 
-    box.innerHTML = `<h3>📁 ${cat.name}</h3>`;
+    box.innerHTML = `<div class="cat">📁 ${cat.name}</div>`;
 
     cat.items.forEach(item => {
 
-      let div = document.createElement("div");
-      div.style.marginLeft = "10px";
-
-      let html = `<b>${item.name}</b><br>`;
+      let html = `<div class="item">📄 ${item.name}</div>`;
 
       item.entries?.forEach(e => {
         html += `
-          <input type="checkbox" value="${e.id}">
-          ${e.size || "-"} | ${e.gsm || "-"}gsm | ${e.side || "-"} → ${e.price} Ks<br>
+          <div class="row">
+            <input type="checkbox" value="${e.id}">
+            ${e.size || "-"} | ${e.gsm || "-"}gsm | ${e.side || "-"} → ${e.price} Ks
+          </div>
         `;
       });
 
-      div.innerHTML = html;
-      box.appendChild(div);
+      box.innerHTML += html;
     });
 
     list.appendChild(box);
