@@ -9,7 +9,7 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// SPEED FIX 🚀 (CACHE DB)
+// DB CACHE
 let DB_CACHE = null;
 
 function loadDB() {
@@ -29,7 +29,6 @@ setInterval(() => {
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
-// CLEAN INPUT
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
@@ -38,26 +37,14 @@ function clean(msg) {
 }
 
 // =======================
-// 🔥 FIX A4 A4 + DUPLICATE WORDS
 function formatSize(size) {
   if (!size) return "";
-
-  let s = String(size).trim();
-
-  // normalize multiple spaces
-  s = s.replace(/\s+/g, " ");
-
-  // split words
+  let s = String(size).trim().replace(/\s+/g, " ");
   let parts = s.split(" ");
-
-  // remove duplicate consecutive words (A4 A4 fix)
   let result = [];
   for (let p of parts) {
-    if (result[result.length - 1] !== p) {
-      result.push(p);
-    }
+    if (result[result.length - 1] !== p) result.push(p);
   }
-
   return result.join(" ");
 }
 
@@ -65,7 +52,6 @@ function formatSize(size) {
 const userState = {};
 
 // =======================
-// FAST SEND
 async function send(userId, text, keyboard = null) {
   const body = {
     receiver: userId,
@@ -118,13 +104,20 @@ function quickKb() {
 }
 
 // =======================
+function sideKb() {
+  return kb([
+    { label: "1️⃣ One Side", value: "side_1" },
+    { label: "2️⃣ Two Side", value: "side_2" }
+  ]);
+}
+
+// =======================
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.event !== "message") return res.sendStatus(200);
 
   const userId = body.sender.id;
-  const rawMsg = body.message.text || "";
-  const msg = clean(rawMsg);
+  const msg = clean(body.message.text || "");
 
   const db = loadDB();
 
@@ -160,35 +153,30 @@ app.post("/webhook", async (req, res) => {
 
   // =======================
   if (msg.startsWith("cat_")) {
-    const index = Number(msg.replace("cat_", ""));
-    const category = db.categories[index];
+    const i = Number(msg.replace("cat_", ""));
+    const cat = db.categories[i];
+    if (!cat) return res.sendStatus(200);
 
-    if (!category) return res.sendStatus(200);
-
-    const items = category.items.map((i, idx) => ({
-      label: `📄 ${i.item} ${i.size} ${i.gsm}`,
-      value: `item_${index}_${idx}`
+    const items = cat.items.map((it, idx) => ({
+      label: `📄 ${it.item} ${it.size} ${it.gsm}`,
+      value: `item_${i}_${idx}`
     }));
 
-    await send(userId, `📁 ${category.name}`, kb(items));
+    await send(userId, `📁 ${cat.name}`, kb(items));
     return res.sendStatus(200);
   }
 
   // =======================
   if (msg.startsWith("item_")) {
-    const parts = msg.split("_");
-    const item = db.categories[parts[1]]?.items[parts[2]];
-
+    const p = msg.split("_");
+    const item = db.categories[p[1]]?.items[p[2]];
     if (!item) return res.sendStatus(200);
 
     const state = userState[userId];
     const sizeText = formatSize(item.size);
 
     if (state?.mode === "calc") {
-      userState[userId] = {
-        mode: "quick",
-        item
-      };
+      userState[userId] = { mode: "quick", item };
 
       await send(
         userId,
@@ -206,9 +194,8 @@ app.post("/webhook", async (req, res) => {
     await send(
       userId,
 `📄 ${item.item}
-
-📏 Size: ${sizeText}
-📦 GSM: ${item.gsm}g
+📏 ${sizeText}
+📦 ${item.gsm}g
 
 💰 1 side: ${item.s1}
 💰 2 side: ${item.s2}`
@@ -229,26 +216,16 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    const parts = msg.split("_");
-    const side = Number(parts[1]);
-    const qty = Number(parts[2]);
+    const [_, side, qty] = msg.split("_");
+    const price = side == 2 ? state.item.s2 : state.item.s1;
+    const total = price * Number(qty);
 
-    if (!qty) return send(userId, "❌ number only");
-
-    const price = side === 2 ? state.item.s2 : state.item.s1;
-    const total = price * qty;
-
-    const sizeText = formatSize(state.item.size);
-
-    await send(
-      userId,
+    await send(userId,
 `🧾 RESULT
 
 📄 ${state.item.item}
-📏 ${sizeText}
-📦 ${state.item.gsm}g
-🧾 ${side} Side
 📦 ${qty} pcs
+🧾 ${side} Side
 
 💰 Total: ${total} Ks`
     );
@@ -258,17 +235,16 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CUSTOM QTY SAFE MODE
+  // CUSTOM QTY
   if (userState[userId]?.mode === "custom_qty") {
     const qty = Number(msg);
 
     if (!qty) {
       if (msg === "back") {
         delete userState[userId];
-        await send(userId, "📦 Select again");
+        await send(userId, "📦 Select Service", kb(SERVICE_MENU));
         return res.sendStatus(200);
       }
-
       await send(userId, "❌ number only");
       return res.sendStatus(200);
     }
@@ -276,10 +252,11 @@ app.post("/webhook", async (req, res) => {
     userState[userId].qty = qty;
     userState[userId].mode = "custom_side";
 
-    await send(userId, "🧾 Select Side\n1️⃣ One Side\n2️⃣ Two Side");
+    await send(userId, "🧾 Select Side", sideKb());
     return res.sendStatus(200);
   }
 
+  // =======================
   if (msg === "side_1" || msg === "side_2") {
     const state = userState[userId];
     if (!state || state.mode !== "custom_side") return res.sendStatus(200);
@@ -290,17 +267,12 @@ app.post("/webhook", async (req, res) => {
     const price = side === 2 ? state.item.s2 : state.item.s1;
     const total = price * qty;
 
-    const sizeText = formatSize(state.item.size);
-
-    await send(
-      userId,
+    await send(userId,
 `🧾 RESULT
 
 📄 ${state.item.item}
-📏 ${sizeText}
-📦 ${state.item.gsm}g
-🧾 ${side} Side
 📦 ${qty} pcs
+🧾 ${side} Side
 
 💰 Total: ${total} Ks`
     );
@@ -314,8 +286,7 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 FIXED STABLE BOT RUNNING");
+  console.log("🚀 FULL FIXED BOT RUNNING");
 });
