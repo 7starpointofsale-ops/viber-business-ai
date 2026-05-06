@@ -7,14 +7,14 @@ const app = express();
 app.use(express.json());
 
 // =======================
-// ROOT SAFE PATH (RENDER FIX)
+// ROOT SAFE PATH
 const ROOT = process.cwd();
 
 const DB_PATH = path.join(ROOT, "database/price.db.json");
 const ADMIN_PATH = path.join(ROOT, "admin");
 
 // =======================
-// DB SAFE LOAD
+// DB LOAD SAFE
 function loadDB() {
   try {
     if (!fs.existsSync(DB_PATH)) {
@@ -41,15 +41,18 @@ function saveDB(data) {
 }
 
 // =======================
-// ADMIN FIX (NO path-to-regexp ERROR)
-if (fs.existsSync(ADMIN_PATH)) {
-  app.use("/admin", express.static(ADMIN_PATH));
+// ADMIN SAFE FIX (NO path-to-regexp crash)
+app.use("/admin", express.static(ADMIN_PATH));
 
-  // IMPORTANT FIX (no "/admin/*")
-  app.get("/admin/:path(*)", (req, res) => {
-    res.sendFile(path.join(ADMIN_PATH, "index.html"));
-  });
-}
+// IMPORTANT: wildcard safe
+app.get("/admin*", (req, res) => {
+  const filePath = path.join(ADMIN_PATH, "index.html");
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.send("Admin not found");
+  }
+});
 
 // =======================
 // API
@@ -165,7 +168,6 @@ app.post("/webhook", async (req, res) => {
     // ================= INVOICE
     if (msg === "invoice") {
       st.cart = [];
-
       const cats = db.categories || [];
 
       return send(uid,
@@ -177,14 +179,14 @@ app.post("/webhook", async (req, res) => {
       ).then(() => res.sendStatus(200));
     }
 
-    // ================= CATEGORY
+    // ================= CATEGORY FIX
     if (msg.includes("_cat_")) {
       const parts = msg.split("_");
       const mode = parts[0];
-      const i = parts[2];
+      const i = Number(parts[2]);
 
-      const cat = db.categories?.[i];
-      if (!cat) return res.sendStatus(200);
+      const cat = db.categories[i];
+      if (!cat || !cat.items) return res.sendStatus(200);
 
       const items = cat.items.map((it, idx) => ({
         label: `📄 ${it.item} ${it.size || ""}`,
@@ -195,20 +197,20 @@ app.post("/webhook", async (req, res) => {
         .then(() => res.sendStatus(200));
     }
 
-    // ================= ITEM
+    // ================= ITEM FIX
     if (msg.includes("_item_")) {
       const parts = msg.split("_");
       const mode = parts[0];
-      const ci = parts[2];
-      const ii = parts[3];
+      const ci = Number(parts[2]);
+      const ii = Number(parts[3]);
 
       const item = db.categories?.[ci]?.items?.[ii];
       if (!item) return res.sendStatus(200);
 
       st.item = item;
 
-      const s1 = Number(item.s1 || 0);
-      const s2 = Number(item.s2 || 0);
+      const s1 = Number(item.s1) || 0;
+      const s2 = Number(item.s2) || 0;
 
       if (mode === "price") {
         return send(uid,
@@ -248,14 +250,14 @@ app.post("/webhook", async (req, res) => {
       return send(uid, "📦 Qty:").then(() => res.sendStatus(200));
     }
 
-    // ================= QTY
+    // ================= QTY FIX
     if (st.step === "qty") {
       const qty = Number(msg);
       if (!qty) return send(uid, "❌ number only").then(() => res.sendStatus(200));
 
       st.qty = qty;
 
-      const price = Number(st.side === 2 ? st.item.s2 : st.item.s1);
+      const price = Number(st.side === 2 ? st.item.s2 : st.item.s1) || 0;
       st.subtotal = price * qty;
 
       st.step = "charge";
@@ -264,10 +266,10 @@ app.post("/webhook", async (req, res) => {
         .then(() => res.sendStatus(200));
     }
 
-    // ================= FINAL (FIX NaN)
+    // ================= FINAL FIX (NO NaN)
     if (st.step === "charge") {
-      const charge = Number(msg || 0);
-      const total = Number(st.subtotal || 0) + charge;
+      const charge = Number(msg) || 0;
+      const total = (Number(st.subtotal) || 0) + charge;
 
       userState[uid] = {};
 
@@ -287,5 +289,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 PRO FIXED SYSTEM RUNNING");
+  console.log("🚀 PRO FINAL SYSTEM RUNNING (CLEAN + STABLE)");
 });
