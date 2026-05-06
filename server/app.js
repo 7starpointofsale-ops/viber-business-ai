@@ -1,7 +1,6 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config();
 
 const app = express();
 app.use(express.json());
@@ -9,16 +8,9 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// ADMIN FOLDER (FIX)
+// ADMIN STATIC
 // =======================
-app.use("/admin", express.static(path.resolve(__dirname, "../admin")));
-
-// =======================
-// HOME
-// =======================
-app.get("/", (req, res) => {
-  res.send("🚀 7Star System Running");
-});
+app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
 // GET DB
@@ -29,7 +21,7 @@ app.get("/api/prices", (req, res) => {
 });
 
 // =======================
-// SAVE
+// SAVE (CREATE / ADD)
 // =======================
 app.post("/api/save-v2", (req, res) => {
   const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
@@ -46,23 +38,65 @@ app.post("/api/save-v2", (req, res) => {
   let it = cat.items.find(i => i.name === item);
 
   if (!it) {
-    it = { name: item, entries: [] };
+    it = { id: Date.now().toString(), name: item, entries: [] };
     cat.items.push(it);
   }
 
   if (!it.entries) it.entries = [];
 
   it.entries.push({
-    id: Date.now().toString(),
+    id: Date.now().toString() + Math.random(),
     size,
     gsm: paper,
     side,
     price: Number(price)
   });
 
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf-8");
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 
-  console.log("✅ SAVED");
+  res.json({ ok: true });
+});
+
+// =======================
+// UPDATE PRICE
+// =======================
+app.post("/api/update-entry", (req, res) => {
+  const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+
+  const { entryId, price } = req.body;
+
+  db.categories.forEach(cat => {
+    cat.items.forEach(item => {
+      item.entries?.forEach(e => {
+        if (e.id == entryId) {
+          e.price = Number(price);
+        }
+      });
+    });
+  });
+
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+
+  res.json({ ok: true });
+});
+
+// =======================
+// DELETE ENTRY
+// =======================
+app.post("/api/delete-entry", (req, res) => {
+  const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+
+  const { entryId } = req.body;
+
+  db.categories.forEach(cat => {
+    cat.items.forEach(item => {
+      if (item.entries) {
+        item.entries = item.entries.filter(e => e.id != entryId);
+      }
+    });
+  });
+
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 
   res.json({ ok: true });
 });
@@ -75,34 +109,9 @@ app.post("/api/delete-category", (req, res) => {
 
   const { category } = req.body;
 
-  db.categories = db.categories.filter(c => c.name !== category);
+  db.categories = db.categories.filter(c => c.name != category);
 
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf-8");
-
-  console.log("🗑 DELETED CATEGORY");
-
-  res.json({ ok: true });
-});
-
-// =======================
-// DELETE ITEMS
-// =======================
-app.post("/api/delete-items", (req, res) => {
-  const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-
-  const { ids } = req.body;
-
-  db.categories.forEach(cat => {
-    cat.items.forEach(item => {
-      if (item.entries) {
-        item.entries = item.entries.filter(e => !ids.includes(e.id));
-      }
-    });
-
-    cat.items = cat.items.filter(i => i.entries && i.entries.length > 0);
-  });
-
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf-8");
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 
   res.json({ ok: true });
 });
@@ -110,5 +119,5 @@ app.post("/api/delete-items", (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 RUNNING ON " + PORT);
+  console.log("🚀 FULL SYSTEM RUNNING");
 });

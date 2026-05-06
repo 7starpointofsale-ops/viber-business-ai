@@ -1,46 +1,16 @@
 let db = {};
 
-// =======================
-// LOAD DB
-// =======================
 async function load() {
-  const res = await fetch('/api/prices');
-  db = await res.json();
-
-  renderCategory();
-  renderList();
+  db = await (await fetch('/api/prices')).json();
+  render();
 }
 
-// =======================
-// CATEGORY RENDER
-// =======================
-function renderCategory() {
-  category.innerHTML = "";
-
-  db.categories.forEach(c => {
-    const opt = document.createElement("option");
-    opt.value = c.name;
-    opt.textContent = c.name;
-    category.appendChild(opt);
-  });
-}
-
-// =======================
-// SAVE (CATEGORY + ITEM)
-// =======================
 async function save() {
-  let cat = newCategory.value.trim() || category.value;
-
-  if (!cat || !item.value || !price.value) {
-    alert("Fill required fields");
-    return;
-  }
-
   await fetch('/api/save-v2', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
-      category: cat,
+      category: newCategory.value || category.value,
       item: item.value,
       size: size.value,
       paper: paper.value,
@@ -49,94 +19,73 @@ async function save() {
     })
   });
 
-  newCategory.value = "";
   item.value = "";
   size.value = "";
   paper.value = "";
   side.value = "";
   price.value = "";
 
-  await load();
+  load();
 }
 
-// =======================
-// DELETE CATEGORY
-// =======================
 async function deleteCategory() {
-  if (!category.value) return;
-
-  if (!confirm("Delete category?")) return;
-
   await fetch('/api/delete-category', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ category: category.value })
   });
 
-  await load();
+  load();
 }
 
-// =======================
-// DELETE ITEMS
-// =======================
-async function deleteSelected() {
-  const ids = [...document.querySelectorAll("input[type=checkbox]:checked")]
-    .map(x => x.value);
-
-  if (!ids.length) {
-    alert("Select items first");
-    return;
-  }
-
-  await fetch('/api/delete-items', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ ids })
+async function updatePrice(id, price) {
+  await fetch('/api/update-entry', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ entryId: id, price })
   });
 
-  await load();
+  load();
 }
 
-// =======================
-// RENDER LIST (CLEAN + WORKING)
-// =======================
-function renderList() {
+async function deleteEntry(id) {
+  await fetch('/api/delete-entry', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ entryId: id })
+  });
+
+  load();
+}
+
+function render() {
   list.innerHTML = "";
 
-  db.categories.forEach(cat => {
+  db.categories.forEach(c => {
 
-    const box = document.createElement("div");
-    box.style.border = "1px solid #ddd";
-    box.style.padding = "10px";
-    box.style.margin = "10px";
-    box.style.borderRadius = "8px";
-    box.style.background = "#fff";
+    let div = document.createElement("div");
+    div.className = "card";
 
-    box.innerHTML = `<h3>📁 ${cat.name}</h3>`;
+    div.innerHTML = `<div class="cat">📁 ${c.name}</div>`;
 
-    cat.items.forEach(item => {
+    c.items.forEach(i => {
 
-      const div = document.createElement("div");
-      div.style.marginLeft = "10px";
+      let html = `<b>${i.name}</b><br>`;
 
-      let html = `<b>📄 ${item.name}</b><br>`;
-
-      item.entries?.forEach(e => {
+      i.entries?.forEach(e => {
         html += `
-          <div style="margin-left:15px;">
-            <input type="checkbox" value="${e.id}">
-            ${e.size || "-"} | ${e.gsm || "-"}gsm | ${e.side || "-"} → ${e.price} Ks
-          </div>
+          📏 ${e.size} | ${e.gsm}gsm | ${e.side}
+          <input value="${e.price}" onchange="updatePrice('${e.id}', this.value)">
+          <button onclick="deleteEntry('${e.id}')">❌</button>
+          <br>
         `;
       });
 
-      div.innerHTML = html;
-      box.appendChild(div);
+      div.innerHTML += html;
     });
 
-    list.appendChild(box);
+    list.appendChild(div);
   });
 }
 
-// =======================
 load();
