@@ -21,13 +21,6 @@ function loadDB() {
 }
 
 // =======================
-// SAVE DB
-// =======================
-function saveDB(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-}
-
-// =======================
 // VIBER SEND
 // =======================
 async function send(userId, text, keyboard = null) {
@@ -37,9 +30,7 @@ async function send(userId, text, keyboard = null) {
     text
   };
 
-  if (keyboard) {
-    body.keyboard = keyboard;
-  }
+  if (keyboard) body.keyboard = keyboard;
 
   try {
     await axios.post(
@@ -57,40 +48,26 @@ async function send(userId, text, keyboard = null) {
 }
 
 // =======================
-// BUTTON BUILDER (GRID 2 COLUMN)
+// BUILD BUTTON GRID (FROM DB ONLY)
 // =======================
 function buildKeyboard(items) {
-  const buttons = items.map(i => ({
-    ActionType: "reply",
-    ActionBody: i.value,
-    Text: i.label,
-    TextSize: "regular",
-    Columns: 6,
-    Rows: 1
-  }));
-
   return {
     Type: "keyboard",
-    Buttons: buttons
+    Buttons: items.map(i => ({
+      ActionType: "reply",
+      ActionBody: i.value,
+      Text: i.label,
+      TextSize: "regular",
+      Columns: 6,
+      Rows: 1
+    }))
   };
 }
 
 // =======================
-// MENU DATA (STATIC FLOW)
-// =======================
-const MENU = {
-  start: [
-    { label: "📁 Digital", value: "menu_digital" },
-    { label: "📁 Vinyl", value: "menu_vinyl" },
-    { label: "📁 Card", value: "menu_card" },
-    { label: "📁 Fixed", value: "menu_fixed" }
-  ]
-};
-
-// =======================
 // NORMALIZE
 // =======================
-function normalize(msg) {
+function norm(msg) {
   return (msg || "").toLowerCase().trim();
 }
 
@@ -103,43 +80,52 @@ app.post("/webhook", async (req, res) => {
   if (body.event !== "message") return res.sendStatus(200);
 
   const userId = body.sender.id;
-  let msg = normalize(body.message.text);
+  const msg = norm(body.message.text);
 
   const db = loadDB();
 
   // =======================
-  // START MENU
+  // START MENU (FROM DB ONLY)
   // =======================
   if (["hi", "hello", "menu"].includes(msg)) {
-    await send(
-      userId,
-      "📦 7Star System\nSelect Category:",
-      buildKeyboard(MENU.start)
-    );
+
+    const cats = db.categories.map(c => ({
+      label: `📁 ${c.name}`,
+      value: `cat_${c.name}`
+    }));
+
+    await send(userId, "📦 Select Category", buildKeyboard(cats));
     return res.sendStatus(200);
   }
 
   // =======================
-  // CATEGORY ROUTE
+  // CATEGORY CLICK (FIXED)
   // =======================
-  if (msg === "menu_digital") {
-    const items = db.categories
-      .find(c => c.name === "Digital Press")
-      ?.items || [];
+  if (msg.startsWith("cat_")) {
 
-    const buttons = items.slice(0, 10).map(i => ({
-      label: `📄 ${i.item} ${i.gsm || ""}`,
+    const catName = msg.replace("cat_", "");
+
+    const cat = db.categories.find(c => c.name === catName);
+
+    if (!cat) {
+      await send(userId, "❌ Category not found");
+      return res.sendStatus(200);
+    }
+
+    const items = cat.items.map(i => ({
+      label: `📄 ${i.item} ${i.size} ${i.gsm || ""}`,
       value: `item_${i.id}`
     }));
 
-    await send(userId, "📁 Digital Press", buildKeyboard(buttons));
+    await send(userId, `📁 ${cat.name}`, buildKeyboard(items));
     return res.sendStatus(200);
   }
 
   // =======================
-  // ITEM SELECT
+  // ITEM CLICK (FIXED SAFE MATCH)
   // =======================
   if (msg.startsWith("item_")) {
+
     const id = msg.replace("item_", "");
 
     let found = null;
@@ -151,13 +137,16 @@ app.post("/webhook", async (req, res) => {
     });
 
     if (!found) {
-      await send(userId, "❌ Not found");
+      await send(userId, "❌ Item not found (DB mismatch)");
       return res.sendStatus(200);
     }
 
     await send(
       userId,
 `📄 ${found.item}
+
+📏 Size: ${found.size}
+📦 GSM: ${found.gsm}
 
 💰 1 side: ${found.s1}
 💰 2 side: ${found.s2}
@@ -169,38 +158,38 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CALC (SIMPLE V10)
+  // SIZE CALC (SAFE SIMPLE)
   // =======================
-  const sizeMatch = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
-  const qtyMatch = msg.match(/(\d+)$/);
+  const size = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
+  const qty = msg.match(/(\d+)$/);
 
-  if (sizeMatch) {
-    const qty = qtyMatch ? Number(qtyMatch[1]) : 1;
-    const area = Number(sizeMatch[1]) * Number(sizeMatch[2]);
+  if (size) {
+    const q = qty ? Number(qty[1]) : 1;
+    const area = Number(size[1]) * Number(size[2]);
 
     await send(
       userId,
 `🧾 RESULT
 
-📏 Size: ${sizeMatch[1]}x${sizeMatch[2]}
-📦 Qty: ${qty}
-
+📏 ${size[1]}x${size[2]}
+📦 Qty: ${q}
 🧮 Area: ${area}
 
-💰 (Auto pricing engine ready)`
+💡 (pricing engine next step)`
     );
 
     return res.sendStatus(200);
   }
 
   // =======================
-  // DEFAULT MENU
+  // DEFAULT
   // =======================
-  await send(
-    userId,
-    "📌 Select menu or type 'hi'",
-    buildKeyboard(MENU.start)
-  );
+  const cats = db.categories.map(c => ({
+    label: `📁 ${c.name}`,
+    value: `cat_${c.name}`
+  }));
+
+  await send(userId, "📌 Select Category", buildKeyboard(cats));
 
   res.sendStatus(200);
 });
@@ -209,5 +198,5 @@ app.post("/webhook", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V10 BUTTON MENU RUNNING");
+  console.log("🚀 V10 FIXED DB-SYNC RUNNING");
 });
