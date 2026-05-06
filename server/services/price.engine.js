@@ -3,67 +3,91 @@ const path = require("path");
 
 const DB_PATH = path.join(__dirname, "../../database/price.db.json");
 
+// =======================
+// LOAD DB
+// =======================
 function loadDB() {
   return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
 }
 
+// =======================
+// FIND ITEM
+// =======================
 function findItem(msg) {
   const db = loadDB();
-  msg = msg.toLowerCase();
 
-  for (const cat of db.categories) {
-    for (const item of cat.items) {
-      const name = item.name.toLowerCase();
+  let found = null;
+  let categoryFound = null;
 
+  db.categories.forEach(c => {
+    c.items.forEach(i => {
       if (
-        msg.includes(name) ||
-        name.split(" ").some(w => msg.includes(w))
+        msg.includes(i.item.toLowerCase()) ||
+        msg.includes(c.name.toLowerCase())
       ) {
-        return item;
+        found = i;
+        categoryFound = c.name;
       }
-    }
+    });
+  });
+
+  return { found, categoryFound };
+}
+
+// =======================
+// EXTRACT SIZE
+// =======================
+function extractSize(msg) {
+  const m = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
+  if (!m) return null;
+
+  return {
+    w: Number(m[1]),
+    h: Number(m[2]),
+    area: Number(m[1]) * Number(m[2])
+  };
+}
+
+// =======================
+// EXTRACT QTY
+// =======================
+function extractQty(msg) {
+  const m = msg.match(/(\d+)\s*(pcs|pc|unit)?/);
+  return m ? Number(m[1]) : 1;
+}
+
+// =======================
+// CALCULATE PRICE
+// =======================
+function calculate(item, size, qty) {
+  if (!item) return null;
+
+  // direct match price table
+  if (item.s1) {
+    return item.s1 * qty;
   }
+
   return null;
 }
 
-function calculate(item, msg) {
-  if (!item) return "❌ Item မတွေ့ပါ";
+// =======================
+// MAIN PARSER
+// =======================
+function parseMessage(msg) {
+  msg = msg.toLowerCase();
 
-  if (item.type === "sqft") {
-    const match = msg.match(/(\d+)\s*x\s*(\d+)/);
+  const { found } = findItem(msg);
+  const size = extractSize(msg);
+  const qty = extractQty(msg);
 
-    if (!match) {
-      return "❌ Size မမှန်ပါ (ဥပမာ 3x4)";
-    }
-
-    const w = Number(match[1]);
-    const h = Number(match[2]);
-    const sqft = w * h;
-
-    const price = sqft * item.price;
-
-    return `📄 ${item.name}
-Size: ${w} x ${h} ft
-Area: ${sqft} sqft
-Price: ${price} Ks`;
-  }
-
-  let out = `📄 ${item.name}\n\n`;
-
-  for (let k in item.prices) {
-    const v = item.prices[k];
-
-    if (typeof v === "object") {
-      out += `${k}:\n`;
-      if (v["1"]) out += `1 Side: ${v["1"]} Ks\n`;
-      if (v["2"]) out += `2 Side: ${v["2"]} Ks\n`;
-      out += "\n";
-    } else {
-      out += `${k}: ${v} Ks\n`;
-    }
-  }
-
-  return out;
+  return {
+    item: found,
+    size,
+    qty,
+    price: calculate(found, size, qty)
+  };
 }
 
-module.exports = { findItem, calculate };
+module.exports = {
+  parseMessage
+};
