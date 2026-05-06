@@ -17,12 +17,22 @@ function loadDB() {
 }
 
 // =======================
+// CLEAN
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
     .toLowerCase()
     .trim();
 }
+
+// =======================
+// 🔥 COMMAND MAP FIX (IMPORTANT)
+const commandMap = {
+  "ဈေးတွက်မယ်": "service_calc",
+  "ဈေးမေးမယ်": "service_price",
+  "calc": "service_calc",
+  "price": "service_price"
+};
 
 // =======================
 const userState = {};
@@ -73,9 +83,9 @@ const SERVICE_MENU = [
 ];
 
 // =======================
-// SAFE INPUT CHECK
 const ignoreMsgs = [".", "home", "back", "menu", "start"];
 
+// =======================
 function isNumber(msg) {
   return /^\d+$/.test(msg);
 }
@@ -119,14 +129,17 @@ app.post("/webhook", async (req, res) => {
 
   const userId = body.sender.id;
   const rawMsg = body.message.text || "";
-  const msg = clean(rawMsg);
+
+  let msg = clean(rawMsg);
+
+  // 🔥 COMMAND MAP FIX APPLY
+  msg = commandMap[msg] || msg;
 
   const db = loadDB();
-
   const state = userState[userId];
 
   // =======================
-  // GLOBAL RESET COMMAND
+  // RESET
   if (ignoreMsgs.includes(msg)) {
     delete userState[userId];
     await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
@@ -291,5 +304,5 @@ kb([
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 STABLE STATE MACHINE VERSION RUNNING");
+  console.log("🚀 V9 STABLE FIXED VERSION RUNNING");
 });
