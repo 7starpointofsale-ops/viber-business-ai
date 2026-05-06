@@ -21,14 +21,26 @@ async function save() {
     })
   });
 
+  clearForm();
   load();
 }
 
-async function updatePrice(id, price) {
+function clearForm() {
+  category.value = "";
+  item.value = "";
+  size.value = "";
+  gsm.value = "";
+  s1.value = "";
+  s2.value = "";
+  lam.value = "";
+  remark.value = "";
+}
+
+async function updatePrice(id, field, value) {
   await fetch("/api/update-entry", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, price })
+    body: JSON.stringify({ id, field, value })
   });
 
   load();
@@ -47,7 +59,7 @@ async function deleteItem(id) {
 function render() {
   list.innerHTML = "";
 
-  db.categories.forEach(c => {
+  (db.categories || []).forEach((c, cIdx) => {
     let html = `
       <div class="box">
         <h3>📁 ${c.name}</h3>
@@ -57,27 +69,39 @@ function render() {
             <th>Item</th>
             <th>Size</th>
             <th>GSM</th>
-            <th>1S</th>
-            <th>2S</th>
+            <th>1 Side</th>
+            <th>2 Side</th>
+            <th>Lamination</th>
+            <th>Remark</th>
             <th>Action</th>
           </tr>
     `;
 
-    c.items.forEach(i => {
+    (c.items || []).forEach((i, idx) => {
+      const id = i.id || `${cIdx}_${idx}`;
+
       html += `
         <tr>
-          <td>${i.item}</td>
-          <td>${i.size}</td>
-          <td>${i.gsm}</td>
+          <td>${i.item || "-"}</td>
+          <td>${i.size || "-"}</td>
+          <td>${i.gsm ?? "-"}</td>
 
           <td>
-            <input value="${i.s1}" onchange="updatePrice('${i.id}', this.value)">
+            <input value="${i.s1 ?? 0}"
+              onchange="updatePrice('${id}','s1',this.value)">
           </td>
 
-          <td>${i.s2}</td>
+          <td>
+            <input value="${i.s2 ?? 0}"
+              onchange="updatePrice('${id}','s2',this.value)">
+          </td>
+
+          <td>${i.lamination ?? "-"}</td>
+
+          <td>${i.remark ?? "-"}</td>
 
           <td>
-            <button onclick="deleteItem('${i.id}')">❌</button>
+            <button onclick="deleteItem('${id}')">❌</button>
           </td>
         </tr>
       `;

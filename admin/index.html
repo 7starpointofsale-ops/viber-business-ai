@@ -7,7 +7,7 @@
 body { font-family: Arial; background:#eef1f6; padding:20px; }
 .box { background:white; padding:15px; margin-bottom:15px; border-radius:10px; }
 input { padding:6px; margin:4px; }
-button { padding:6px 10px; margin:3px; }
+button { padding:6px 10px; margin:3px; cursor:pointer; }
 table { width:100%; border-collapse:collapse; }
 th,td { border:1px solid #ddd; padding:6px; text-align:center; }
 th { background:#f5f5f5; }
@@ -19,69 +19,21 @@ th { background:#f5f5f5; }
 <h2>📦 7Star POS v9</h2>
 
 <div class="box">
-<input id="category" placeholder="category">
-<input id="item" placeholder="item">
-<input id="size" placeholder="size">
-<input id="gsm" placeholder="gsm">
-<input id="s1" placeholder="1 side">
-<input id="s2" placeholder="2 side">
-<input id="lam" placeholder="lam">
-<input id="remark" placeholder="remark">
-<br>
-<button onclick="save()">💾 Save</button>
+  <input id="category" placeholder="category">
+  <input id="item" placeholder="item">
+  <input id="size" placeholder="size">
+  <input id="gsm" placeholder="gsm">
+  <input id="s1" placeholder="1 side">
+  <input id="s2" placeholder="2 side">
+  <input id="lam" placeholder="lamination">
+  <input id="remark" placeholder="remark">
+  <br>
+  <button onclick="save()">💾 Save</button>
 </div>
 
 <div id="list"></div>
 
-<script>
-let db = {};
-
-async function load(){
-db = await (await fetch("/api/prices")).json();
-render();
-}
-
-async function save(){
-await fetch("/api/save-v2",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-category:category.value,
-item:item.value,
-size:size.value,
-gsm:gsm.value,
-s1:s1.value,
-s2:s2.value,
-lamination:lam.value,
-remark:remark.value
-})
-});
-load();
-}
-
-function render(){
-list.innerHTML="";
-db.categories.forEach(c=>{
-let html=`<div class="box"><h3>📁 ${c.name}</h3><table>
-<tr><th>Item</th><th>Size</th><th>GSM</th><th>1S</th><th>2S</th></tr>`;
-
-c.items.forEach(i=>{
-html+=`<tr>
-<td>${i.item}</td>
-<td>${i.size}</td>
-<td>${i.gsm}</td>
-<td>${i.s1}</td>
-<td>${i.s2}</td>
-</tr>`;
-});
-
-html+="</table></div>";
-list.innerHTML+=html;
-});
-}
-
-load();
-</script>
+<script src="./app.js"></script>
 
 </body>
 </html>
