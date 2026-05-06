@@ -17,6 +17,7 @@ let DB_CACHE = null;
 function loadDB() {
   try {
     DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+    if (!DB_CACHE.categories) DB_CACHE.categories = [];
   } catch {
     DB_CACHE = { categories: [] };
   }
@@ -28,17 +29,11 @@ function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-// refresh cache
-setInterval(() => (DB_CACHE = null), 5000);
-
 // =======================
-// STATIC ADMIN (FIXED)
+// ADMIN (FIXED - ALWAYS LOADS)
 const adminPath = path.join(__dirname, "../admin");
 
-app.use("/admin", express.static(adminPath, {
-  index: "index.html"
-}));
-
+app.use("/admin", express.static(adminPath));
 app.get("/admin/*", (req, res) => {
   res.sendFile(path.join(adminPath, "index.html"));
 });
@@ -48,7 +43,7 @@ app.get("/admin/*", (req, res) => {
 const userState = {};
 
 // =======================
-// CLEAN
+// CLEAN TEXT
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦🧾]/g, "")
@@ -73,7 +68,9 @@ async function send(userId, text, keyboard = null) {
         headers: { "X-Viber-Auth-Token": process.env.VIBER_TOKEN }
       }
     );
-  } catch (e) {}
+  } catch (e) {
+    console.log("VIBER ERROR:", e.message);
+  }
 }
 
 // =======================
@@ -102,171 +99,186 @@ const MAIN_MENU = kb([
 // =======================
 // WEBHOOK
 app.post("/webhook", async (req, res) => {
-  const body = req.body;
-  if (body.event !== "message") return res.sendStatus(200);
+  try {
+    const body = req.body;
+    if (body.event !== "message") return res.sendStatus(200);
 
-  const uid = body.sender.id;
-  const msg = clean(body.message.text);
-  const db = loadDB();
+    const uid = body.sender.id;
+    const msg = clean(body.message.text || "");
+    const db = loadDB();
 
-  if (!userState[uid]) userState[uid] = {};
-  const st = userState[uid];
+    if (!userState[uid]) userState[uid] = {};
+    const st = userState[uid];
 
-  // RESET
-  if (["hi", "hello", "menu", "start"].includes(msg)) {
-    userState[uid] = {};
-    return send(uid, "📦 Main Menu", MAIN_MENU).then(() => res.sendStatus(200));
-  }
+    // ================= RESET
+    if (["hi", "hello", "menu", "start"].includes(msg)) {
+      userState[uid] = {};
+      await send(uid, "📦 Main Menu", MAIN_MENU);
+      return res.sendStatus(200);
+    }
 
-  // PRICE
-  if (msg === "price") {
-    st.mode = "price";
+    // ================= PRICE
+    if (msg === "price") {
+      st.mode = "price";
 
-    const cats = db.categories.map((c, i) => ({
-      label: `📁 ${c.name}`,
-      value: `price_cat_${i}`
-    }));
+      const cats = db.categories.map((c, i) => ({
+        label: `📁 ${c.name}`,
+        value: `price_cat_${i}`
+      }));
 
-    return send(uid, "📁 Select Category", kb(cats)).then(() =>
-      res.sendStatus(200)
-    );
-  }
+      await send(uid, "📁 Select Category", kb(cats));
+      return res.sendStatus(200);
+    }
 
-  // CALC
-  if (msg === "calc") {
-    st.mode = "calc";
-    st.step = "cat";
+    // ================= CALC
+    if (msg === "calc") {
+      st.mode = "calc";
 
-    const cats = db.categories.map((c, i) => ({
-      label: `📁 ${c.name}`,
-      value: `calc_cat_${i}`
-    }));
+      const cats = db.categories.map((c, i) => ({
+        label: `📁 ${c.name}`,
+        value: `calc_cat_${i}`
+      }));
 
-    return send(uid, "🧮 Select Category", kb(cats)).then(() =>
-      res.sendStatus(200)
-    );
-  }
+      await send(uid, "🧮 Select Category", kb(cats));
+      return res.sendStatus(200);
+    }
 
-  // INVOICE
-  if (msg === "invoice") {
-    st.mode = "invoice";
-    st.step = "cat";
-    st.cart = [];
+    // ================= INVOICE
+    if (msg === "invoice") {
+      st.mode = "invoice";
+      st.cart = [];
 
-    const cats = db.categories.map((c, i) => ({
-      label: `📁 ${c.name}`,
-      value: `inv_cat_${i}`
-    }));
+      const cats = db.categories.map((c, i) => ({
+        label: `📁 ${c.name}`,
+        value: `inv_cat_${i}`
+      }));
 
-    return send(uid, "🧾 Invoice Mode", kb(cats)).then(() =>
-      res.sendStatus(200)
-    );
-  }
+      await send(uid, "🧾 Invoice Mode", kb(cats));
+      return res.sendStatus(200);
+    }
 
-  // CATEGORY
-  if (msg.includes("_cat_")) {
-    const [mode, , i] = msg.split("_");
-    const cat = db.categories[i];
-    if (!cat) return res.sendStatus(200);
+    // ================= CATEGORY FIX (IMPORTANT)
+    if (msg.includes("_cat_")) {
+      const parts = msg.split("_");
+      const mode = parts[0];
+      const i = parts[2];
 
-    st.catIndex = i;
+      const cat = db.categories[i];
+      if (!cat) return res.sendStatus(200);
 
-    const items = cat.items.map((it, idx) => ({
-      label: `📄 ${it.item} ${it.size || ""}`,
-      value: `${mode}_item_${i}_${idx}`
-    }));
+      st.catIndex = i;
 
-    return send(uid, `📁 ${cat.name}`, kb(items)).then(() =>
-      res.sendStatus(200)
-    );
-  }
+      const items = cat.items.map((it, idx) => ({
+        label: `📄 ${it.item} ${it.size || ""}`,
+        value: `${mode}_item_${i}_${idx}`
+      }));
 
-  // ITEM
-  if (msg.includes("_item_")) {
-    const [mode, , ci, ii] = msg.split("_");
-    const item = db.categories[ci]?.items[ii];
-    if (!item) return res.sendStatus(200);
+      await send(uid, `📁 ${cat.name}`, kb(items));
+      return res.sendStatus(200);
+    }
 
-    st.item = item;
+    // ================= ITEM FIX
+    if (msg.includes("_item_")) {
+      const parts = msg.split("_");
+      const mode = parts[0];
+      const ci = parts[2];
+      const ii = parts[3];
 
-    if (mode === "price") {
-      return send(uid,
+      const item = db.categories?.[ci]?.items?.[ii];
+      if (!item) return res.sendStatus(200);
+
+      st.item = item;
+
+      // PRICE MODE
+      if (mode === "price") {
+        await send(uid,
 `📄 ${item.item}
-📏 ${item.size}
+📏 ${item.size || "-"}
 💰 1S: ${item.s1}
 💰 2S: ${item.s2}`
-      ).then(() => res.sendStatus(200));
-    }
+        );
+        return res.sendStatus(200);
+      }
 
-    if (mode === "calc") {
-      st.step = "side";
+      // CALC MODE
+      if (mode === "calc") {
+        st.step = "side";
 
-      return send(uid,
+        await send(uid,
 `📄 ${item.item}
-📏 ${item.size}
+📏 ${item.size || "-"}
 
 🧮 Select Side`,
-        kb([
-          { label: "1️⃣ One Side", value: "side_1" },
-          { label: "2️⃣ Two Side", value: "side_2" }
-        ])
-      ).then(() => res.sendStatus(200));
+          kb([
+            { label: "1️⃣ One Side", value: "side_1" },
+            { label: "2️⃣ Two Side", value: "side_2" }
+          ])
+        );
+
+        return res.sendStatus(200);
+      }
+
+      // INVOICE MODE (SAFE)
+      if (mode === "inv") {
+        if (!st.cart) st.cart = [];
+
+        st.cart.push({
+          name: item.item,
+          size: item.size,
+          price: item.s1,
+          qty: 1
+        });
+
+        await send(uid, "✔ Added to Invoice");
+        return res.sendStatus(200);
+      }
     }
 
-    if (mode === "inv") {
-      st.cart.push({
-        name: item.item,
-        size: item.size,
-        price: item.s1,
-        qty: 1
-      });
+    // ================= SIDE
+    if (msg === "side_1" || msg === "side_2") {
+      if (!st.item) return res.sendStatus(200);
 
-      return send(uid, "✔ Added to Invoice").then(() =>
-        res.sendStatus(200)
-      );
+      st.side = msg === "side_2" ? 2 : 1;
+      st.step = "qty";
+
+      await send(uid, "📦 Enter Qty:");
+      return res.sendStatus(200);
     }
-  }
 
-  // SIDE
-  if (msg === "side_1" || msg === "side_2") {
-    if (!st.item) return res.sendStatus(200);
+    // ================= QTY
+    if (st.step === "qty") {
+      const qty = Number(msg);
+      if (!qty) {
+        await send(uid, "❌ number only");
+        return res.sendStatus(200);
+      }
 
-    st.side = msg === "side_2" ? 2 : 1;
-    st.step = "qty";
+      st.qty = qty;
 
-    return send(uid, "📦 Enter Qty:").then(() => res.sendStatus(200));
-  }
+      const price = st.side === 2 ? st.item.s2 : st.item.s1;
+      st.subtotal = price * qty;
 
-  // QTY
-  if (st.step === "qty") {
-    const qty = Number(msg);
-    if (!qty) return send(uid, "❌ number only").then(() => res.sendStatus(200));
+      st.step = "charge";
 
-    st.qty = qty;
-
-    const price = st.side === 2 ? st.item.s2 : st.item.s1;
-    st.subtotal = price * qty;
-
-    st.step = "charge";
-
-    return send(uid,
+      await send(uid,
 `🧾 RESULT
+
 📄 ${st.item.item}
 📦 Qty: ${qty}
 💰 Sub: ${st.subtotal}
 
-➕ Charge?`
-    ).then(() => res.sendStatus(200));
-  }
+➕ Charge?`);
+      return res.sendStatus(200);
+    }
 
-  // FINAL
-  if (st.step === "charge") {
-    const charge = Number(msg || 0);
-    const total = st.subtotal + charge;
+    // ================= FINAL
+    if (st.step === "charge") {
+      const charge = Number(msg || 0);
+      const total = st.subtotal + charge;
 
-    userState[uid] = {};
+      userState[uid] = {};
 
-    return send(uid,
+      await send(uid,
 `🧾 FINAL
 
 📄 ${st.item.item}
@@ -274,15 +286,22 @@ app.post("/webhook", async (req, res) => {
 💰 Sub: ${st.subtotal}
 ➕ Charge: ${charge}
 
-🔥 TOTAL: ${total} Ks`
-    ).then(() => res.sendStatus(200));
-  }
+🔥 TOTAL: ${total} Ks`);
 
-  return send(uid, "📦 Menu", MAIN_MENU).then(() => res.sendStatus(200));
+      return res.sendStatus(200);
+    }
+
+    await send(uid, "📦 Menu", MAIN_MENU);
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.log("WEBHOOK ERROR:", err.message);
+    res.sendStatus(200);
+  }
 });
 
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 STABLE V10 FIXED SYSTEM RUNNING");
+  console.log("🚀 STABLE FULL FIX SYSTEM RUNNING");
 });
