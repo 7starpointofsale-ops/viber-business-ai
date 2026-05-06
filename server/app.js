@@ -26,7 +26,7 @@ function clean(msg) {
 }
 
 // =======================
-// 🔥 COMMAND MAP FIX (IMPORTANT)
+// COMMAND MAP (IMPORTANT FIX)
 const commandMap = {
   "ဈေးတွက်မယ်": "service_calc",
   "ဈေးမေးမယ်": "service_price",
@@ -91,6 +91,7 @@ function isNumber(msg) {
 }
 
 // =======================
+// SMART SEARCH
 function findItemSmart(db, msg) {
   let best = null;
   let score = 0;
@@ -158,6 +159,7 @@ app.post("/webhook", async (req, res) => {
       label: `📁 ${c.name}`,
       value: `cat_${i}`
     }));
+
     await send(userId, "📁 Select Category", kb(cats));
     return res.sendStatus(200);
   }
@@ -279,7 +281,7 @@ kb([
   }
 
   // =======================
-  // AI ONLY WHEN NO STATE
+  // AI ONLY WHEN NO STATE (IMPORTANT FIX)
   if (!state) {
     const item = findItemSmart(db, msg);
 
@@ -304,5 +306,5 @@ kb([
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V9 STABLE FIXED VERSION RUNNING");
+  console.log("🚀 V9 FINAL STABLE PRODUCTION VERSION RUNNING");
 });
