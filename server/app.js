@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 
-const { parseMessage } = require("./services/price.engine");
+require("dotenv").config();
 
 const app = express();
 app.use(express.json());
@@ -11,235 +11,228 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// ADMIN STATIC
-app.use("/admin", express.static(path.join(__dirname, "../admin")));
+// SESSION MEMORY (in RAM)
+// =======================
+const sessions = {};
 
 // =======================
-// GET DB
-app.get("/api/prices", (req, res) => {
-  const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-  res.json(db);
-});
-
+// LOAD DB
 // =======================
-// SAVE
-app.post("/api/save-v2", (req, res) => {
-  const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-
-  const data = req.body;
-  const { category, item } = data;
-
-  if (!category || !item) return res.json({ ok: false });
-
-  let cat = db.categories.find(c => c.name === category);
-
-  if (!cat) {
-    cat = { name: category, items: [] };
-    db.categories.push(cat);
-  }
-
-  cat.items.push({
-    id: Date.now().toString(),
-    ...data
-  });
-
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  res.json({ ok: true });
-});
-
-// =======================
-// UPDATE
-app.post("/api/update-entry", (req, res) => {
-  const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-  const { id, price } = req.body;
-
-  db.categories.forEach(c => {
-    c.items.forEach(i => {
-      if (i.id === id) {
-        i.price = Number(price);
-      }
-    });
-  });
-
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  res.json({ ok: true });
-});
-
-// =======================
-// DELETE
-app.post("/api/delete-entry", (req, res) => {
-  const db = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-  const { id } = req.body;
-
-  db.categories.forEach(c => {
-    c.items = c.items.filter(i => i.id !== id);
-  });
-
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-  res.json({ ok: true });
-});
-
-// =======================
-// VIBER SEND
-async function send(userId, text) {
-  try {
-    await axios.post(
-      "https://chatapi.viber.com/pa/send_message",
-      {
-        receiver: userId,
-        type: "text",
-        text
-      },
-      {
-        headers: {
-          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
-        }
-      }
-    );
-  } catch (e) {
-    console.log("Viber error:", e.message);
-  }
+function loadDB() {
+  return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
 }
 
 // =======================
-// NORMALIZE (MM + fix typo)
-function normalize(msg = "") {
-  return msg
-    .toLowerCase()
-    .replace(/၁/g, "1")
-    .replace(/၂/g, "2")
-    .replace(/၃/g, "3")
-    .replace(/၄/g, "4")
-    .replace(/၅/g, "5")
-    .replace(/၆/g, "6")
-    .replace(/၇/g, "7")
-    .replace(/၈/g, "8")
-    .replace(/၉/g, "9")
-    .replace(/၀/g, "0")
-    .replace(/\*/g, "x")
-    .trim();
-}
-
+// SEND VIBER MESSAGE
 // =======================
-// FIND SERVICE (FIXED STRONG MATCH)
-function findService(db, msg) {
-  let best = null;
-  let score = 0;
+async function send(userId, text, keyboard = null) {
+  const payload = {
+    receiver: userId,
+    type: "text",
+    text
+  };
 
-  db.categories.forEach(c => {
-    c.items.forEach(i => {
+  if (keyboard) payload.keyboard = keyboard;
 
-      const name = (i.item || "").toLowerCase();
-
-      let s = 0;
-
-      if (msg.includes(name)) s += 3;
-      if (msg.includes(c.name.toLowerCase())) s += 2;
-
-      if (s > score) {
-        score = s;
-        best = i;
+  await axios.post(
+    "https://chatapi.viber.com/pa/send_message",
+    payload,
+    {
+      headers: {
+        "X-Viber-Auth-Token": process.env.VIBER_TOKEN
       }
-    });
-  });
-
-  return best;
-}
-
-// =======================
-// SAFE CALC
-function calc(msg) {
-  try {
-    if (/^[0-9+\-*/().\s]+$/.test(msg)) {
-      return eval(msg);
     }
-  } catch {}
-  return null;
+  );
 }
 
 // =======================
-// WEBHOOK (FIXED LOGIC)
+// MAIN MENU
+// =======================
+function mainMenu() {
+  return {
+    Type: "keyboard",
+    Buttons: [
+      { ActionType: "reply", ActionBody: "MENU_ORDER", Text: "📦 Order" },
+      { ActionType: "reply", ActionBody: "MENU_PRICE", Text: "💰 Price Check" },
+      { ActionType: "reply", ActionBody: "MENU_CALC", Text: "🧮 Calculator" }
+    ]
+  };
+}
+
+// =======================
+// CATEGORY MENU
+// =======================
+function categoryMenu(db) {
+  return {
+    Type: "keyboard",
+    Buttons: db.categories.map(c => ({
+      ActionType: "reply",
+      ActionBody: `CAT_${c.name}`,
+      Text: c.name
+    }))
+  };
+}
+
+// =======================
+// ITEM MENU
+// =======================
+function itemMenu(cat) {
+  return {
+    Type: "keyboard",
+    Buttons: cat.items.map(i => ({
+      ActionType: "reply",
+      ActionBody: `ITEM_${i.item}`,
+      Text: i.item
+    }))
+  };
+}
+
+// =======================
+// SIZE MENU
+// =======================
+function sizeMenu() {
+  return {
+    Type: "keyboard",
+    Buttons: [
+      { ActionType: "reply", ActionBody: "SIZE_A4", Text: "A4" },
+      { ActionType: "reply", ActionBody: "SIZE_13X19", Text: "13x19" }
+    ]
+  };
+}
+
+// =======================
+// GSM MENU
+// =======================
+function gsmMenu() {
+  return {
+    Type: "keyboard",
+    Buttons: [
+      { ActionType: "reply", ActionBody: "GSM_128", Text: "128gsm" },
+      { ActionType: "reply", ActionBody: "GSM_210", Text: "210gsm" },
+      { ActionType: "reply", ActionBody: "GSM_250", Text: "250gsm" },
+      { ActionType: "reply", ActionBody: "GSM_300", Text: "300gsm" }
+    ]
+  };
+}
+
+// =======================
+// SIDE MENU
+// =======================
+function sideMenu() {
+  return {
+    Type: "keyboard",
+    Buttons: [
+      { ActionType: "reply", ActionBody: "SIDE_1", Text: "1 Side" },
+      { ActionType: "reply", ActionBody: "SIDE_2", Text: "2 Side" }
+    ]
+  };
+}
+
+// =======================
+// WEBHOOK
+// =======================
 app.post("/webhook", async (req, res) => {
   const body = req.body;
 
   if (body.event !== "message") return res.sendStatus(200);
 
   const userId = body.sender.id;
-  let msg = normalize(body.message.text || "");
+  const msg = body.message.text;
 
-  const db = JSON.parse(fs.readFileSync(DB_PATH));
+  const db = loadDB();
 
   // =======================
-  // GREETING
-  if (["hi", "hello", "မင်္ဂလာပါ"].includes(msg)) {
-    await send(userId, "👋 7Star System Ready\nType service name");
+  // INIT SESSION
+  if (!sessions[userId]) {
+    sessions[userId] = {};
+  }
+
+  const s = sessions[userId];
+
+  // =======================
+  // START
+  if (msg === "hi" || msg === "hello") {
+    s.step = "MAIN";
+    await send(userId, "👋 Welcome to 7Star System", mainMenu());
     return res.sendStatus(200);
   }
 
   // =======================
-  // CALC
-  const c = calc(msg);
-  if (c !== null) {
-    await send(userId, `🧮 ${c}`);
+  // MENU SELECT
+  if (msg === "MENU_PRICE") {
+    s.step = "CATEGORY";
+    await send(userId, "📁 Select Category", categoryMenu(db));
     return res.sendStatus(200);
   }
 
-  // =======================
-  const item = findService(db, msg);
+  if (msg.startsWith("CAT_")) {
+    const catName = msg.replace("CAT_", "");
+    s.category = db.categories.find(c => c.name === catName);
+    s.step = "ITEM";
 
-  if (!item) {
-    await send(userId, "❌ Service မတွေ့ပါ");
+    await send(userId, "📄 Select Item", itemMenu(s.category));
     return res.sendStatus(200);
   }
 
-  // =======================
-  const sizeMatch = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
-  const qtyMatch = msg.match(/(\d+)/);
-  const qty = qtyMatch ? Number(qtyMatch[1]) : 1;
+  if (msg.startsWith("ITEM_")) {
+    const itemName = msg.replace("ITEM_", "");
+    s.item = s.category.items.find(i => i.item === itemName);
 
-  const hasPrice = item.s1 && item.s2;
+    s.step = "SIZE";
+    await send(userId, "📏 Select Size", sizeMenu());
+    return res.sendStatus(200);
+  }
 
-  // =======================
-  // CASE 1: FULL INPUT → DIRECT RESULT (NO SIZE QUESTION)
-  if (sizeMatch && hasPrice) {
+  if (msg.startsWith("SIZE_")) {
+    s.size = msg.replace("SIZE_", "");
+    s.step = "GSM";
 
-    const total = item.s1 * qty;
+    await send(userId, "📄 Select GSM", gsmMenu());
+    return res.sendStatus(200);
+  }
 
-    await send(userId,
+  if (msg.startsWith("GSM_")) {
+    s.gsm = msg.replace("GSM_", "");
+    s.step = "SIDE";
+
+    await send(userId, "📄 Select Side", sideMenu());
+    return res.sendStatus(200);
+  }
+
+  if (msg.startsWith("SIDE_")) {
+    s.side = msg.replace("SIDE_", "");
+
+    // =======================
+    // PRICE MATCH
+    const found = s.item;
+
+    const price =
+      s.side === "1"
+        ? found.s1
+        : found.s2;
+
+    await send(
+      userId,
 `🧾 RESULT
-Item: ${item.item}
-Qty: ${qty}
 
-💰 Total: ${total} Ks`
+Item: ${found.item}
+Size: ${s.size}
+GSM: ${s.gsm}
+Side: ${s.side}
+
+💰 Price: ${price} Ks`
     );
 
+    s.step = "DONE";
     return res.sendStatus(200);
   }
 
   // =======================
-  // CASE 2: SERVICE ONLY → SHOW OPTIONS (NO LOOP BUG)
-  if (!sizeMatch && hasPrice) {
-
-    await send(userId,
-`📦 ${item.item}
-
-💰 1 side: ${item.s1}
-💰 2 side: ${item.s2}
-
-👉 send: size qty (eg: 3x6 2)`
-    );
-
-    return res.sendStatus(200);
-  }
-
-  // =======================
-  await send(userId, "📏 Please provide size + qty");
   res.sendStatus(200);
 });
 
 // =======================
 const PORT = process.env.PORT || 10000;
-
 app.listen(PORT, () => {
-  console.log("🚀 V10 STABLE SYSTEM RUNNING");
+  console.log("🚀 V10 CLICK MENU RUNNING");
 });
