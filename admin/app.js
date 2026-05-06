@@ -1,6 +1,8 @@
 let db = {};
 
 // =======================
+// LOAD DB
+// =======================
 async function load() {
   const res = await fetch('/api/prices');
   db = await res.json();
@@ -10,19 +12,21 @@ async function load() {
 }
 
 // =======================
+// CATEGORY RENDER
+// =======================
 function renderCategory() {
   category.innerHTML = "";
 
   db.categories.forEach(c => {
-    let opt = document.createElement("option");
+    const opt = document.createElement("option");
     opt.value = c.name;
-    opt.innerText = c.name;
+    opt.textContent = c.name;
     category.appendChild(opt);
   });
 }
 
 // =======================
-// SAVE (FIXED SYNC)
+// SAVE (CATEGORY + ITEM)
 // =======================
 async function save() {
   let cat = newCategory.value.trim() || category.value;
@@ -52,11 +56,11 @@ async function save() {
   side.value = "";
   price.value = "";
 
-  await load(); // 🔥 IMPORTANT FIX
+  await load();
 }
 
 // =======================
-// DELETE CATEGORY (FIXED)
+// DELETE CATEGORY
 // =======================
 async function deleteCategory() {
   if (!category.value) return;
@@ -69,15 +73,20 @@ async function deleteCategory() {
     body: JSON.stringify({ category: category.value })
   });
 
-  await load(); // 🔥 FIX
+  await load();
 }
 
+// =======================
+// DELETE ITEMS
 // =======================
 async function deleteSelected() {
   const ids = [...document.querySelectorAll("input[type=checkbox]:checked")]
     .map(x => x.value);
 
-  if (!ids.length) return alert("Select items");
+  if (!ids.length) {
+    alert("Select items first");
+    return;
+  }
 
   await fetch('/api/delete-items', {
     method: 'POST',
@@ -85,40 +94,49 @@ async function deleteSelected() {
     body: JSON.stringify({ ids })
   });
 
-  await load(); // 🔥 FIX
+  await load();
 }
 
 // =======================
-// RENDER (PREMIUM UI FIX)
+// RENDER LIST (CLEAN + WORKING)
 // =======================
 function renderList() {
   list.innerHTML = "";
 
   db.categories.forEach(cat => {
 
-    let box = document.createElement("div");
-    box.className = "box";
+    const box = document.createElement("div");
+    box.style.border = "1px solid #ddd";
+    box.style.padding = "10px";
+    box.style.margin = "10px";
+    box.style.borderRadius = "8px";
+    box.style.background = "#fff";
 
-    box.innerHTML = `<div class="cat">📁 ${cat.name}</div>`;
+    box.innerHTML = `<h3>📁 ${cat.name}</h3>`;
 
     cat.items.forEach(item => {
 
-      let html = `<div class="item">📄 ${item.name}</div>`;
+      const div = document.createElement("div");
+      div.style.marginLeft = "10px";
+
+      let html = `<b>📄 ${item.name}</b><br>`;
 
       item.entries?.forEach(e => {
         html += `
-          <div class="row">
+          <div style="margin-left:15px;">
             <input type="checkbox" value="${e.id}">
             ${e.size || "-"} | ${e.gsm || "-"}gsm | ${e.side || "-"} → ${e.price} Ks
           </div>
         `;
       });
 
-      box.innerHTML += html;
+      div.innerHTML = html;
+      box.appendChild(div);
     });
 
     list.appendChild(box);
   });
 }
 
+// =======================
 load();
