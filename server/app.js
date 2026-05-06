@@ -29,7 +29,7 @@ setInterval(() => {
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
-// CLEAN INPUT (SAFE)
+// CLEAN INPUT
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
@@ -96,17 +96,6 @@ const SERVICE_MENU = [
 ];
 
 // =======================
-function quickKb() {
-  return kb([
-    { label: "1️⃣ 1S 50", value: "q_1_50" },
-    { label: "2️⃣ 1S 100", value: "q_1_100" },
-    { label: "3️⃣ 2S 50", value: "q_2_50" },
-    { label: "4️⃣ 2S 100", value: "q_2_100" },
-    { label: "✏️ Custom", value: "q_custom" }
-  ]);
-}
-
-// =======================
 function sideKb() {
   return kb([
     { label: "1️⃣ One Side", value: "side_1" },
@@ -121,19 +110,11 @@ app.post("/webhook", async (req, res) => {
 
   const userId = body.sender.id;
   const msg = clean(body.message.text || "");
-
   const db = loadDB();
 
   // =======================
-  // RESET PROTECTION
-  if (!userState[userId] && msg === "back") {
-    await send(userId, "📦 Select Service", kb(SERVICE_MENU));
-    return res.sendStatus(200);
-  }
-
-  // =======================
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
-    userState[userId] = null;
+    userState[userId] = {};
     await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
     return res.sendStatus(200);
   }
@@ -183,22 +164,25 @@ app.post("/webhook", async (req, res) => {
     const item = db.categories[p[1]]?.items[p[2]];
     if (!item) return res.sendStatus(200);
 
-    const state = userState[userId];
+    const state = userState[userId] || {};
     const sizeText = formatSize(item.size);
 
-    if (state?.mode === "calc") {
-      userState[userId] = { mode: "quick", item };
+    // ⭐ IMPORTANT FIX: ALWAYS SAVE ITEM
+    userState[userId] = {
+      ...state,
+      item
+    };
 
+    if (state.mode === "calc") {
       await send(
         userId,
 `📄 ${item.item}
 📏 ${sizeText}
 📦 ${item.gsm}g
 
-📦 Quick Select`,
-        quickKb()
+🧮 Choose mode`,
+        sideKb()
       );
-
       return res.sendStatus(200);
     }
 
@@ -209,64 +193,22 @@ app.post("/webhook", async (req, res) => {
 📦 ${item.gsm}g
 
 💰 1 side: ${item.s1}
-💰 2 side: ${item.s2}`
+💰 2 side: ${item.s2}
+
+👉 Press "ဈေးတွက်မယ်" for calculation`
     );
 
     return res.sendStatus(200);
   }
 
   // =======================
-  if (msg.startsWith("q_")) {
+  // SIDE SELECT (CUSTOM FLOW)
+  if (msg === "side_1" || msg === "side_2") {
     const state = userState[userId];
     if (!state?.item) return res.sendStatus(200);
 
-    if (msg === "q_custom") {
-      userState[userId].mode = "custom_qty";
-      await send(userId, "📦 Enter Qty:");
-      return res.sendStatus(200);
-    }
-
-    const [_, side, qty] = msg.split("_");
-    const price = side == 2 ? state.item.s2 : state.item.s1;
-    const total = price * Number(qty);
-
-    await send(userId,
-`🧾 RESULT
-
-📄 ${state.item.item}
-📦 ${qty} pcs
-🧾 ${side} Side
-
-💰 Total: ${total} Ks`
-    );
-
-    delete userState[userId];
-    return res.sendStatus(200);
-  }
-
-  // =======================
-  if (userState[userId]?.mode === "custom_qty") {
-    const qty = Number(msg);
-
-    if (!qty) {
-      await send(userId, "❌ number only (or back)");
-      return res.sendStatus(200);
-    }
-
-    userState[userId].qty = qty;
-    userState[userId].mode = "custom_side";
-
-    await send(userId, "🧾 Select Side", sideKb());
-    return res.sendStatus(200);
-  }
-
-  // =======================
-  if (msg === "side_1" || msg === "side_2") {
-    const state = userState[userId];
-    if (!state || state.mode !== "custom_side") return res.sendStatus(200);
-
     const side = msg === "side_2" ? 2 : 1;
-    const qty = state.qty;
+    const qty = state.qty || 1;
 
     const price = side === 2 ? state.item.s2 : state.item.s1;
     const total = price * qty;
@@ -286,16 +228,34 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // SAFE FALLBACK (NO LOOP BUG)
-  if (!userState[userId]) {
-    await send(userId, "📦 Select Service", kb(SERVICE_MENU));
+  // MANUAL QTY INPUT
+  if (stateMode(userState[userId], "custom_qty")) {
+    const qty = Number(msg);
+
+    if (!qty) {
+      await send(userId, "❌ number only");
+      return res.sendStatus(200);
+    }
+
+    userState[userId].qty = qty;
+    userState[userId].mode = "custom_side";
+
+    await send(userId, "🧾 Select Side", sideKb());
+    return res.sendStatus(200);
   }
 
+  function stateMode(state, m) {
+    return state?.mode === m;
+  }
+
+  // =======================
+  // FALLBACK
+  await send(userId, "📦 Select Service", kb(SERVICE_MENU));
   res.sendStatus(200);
 });
 
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 FINAL STABLE BOT RUNNING");
+  console.log("🚀 STABLE FIXED BOT RUNNING");
 });
