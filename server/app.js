@@ -7,43 +7,39 @@ const app = express();
 app.use(express.json());
 
 // =======================
-// DB PATH
-const DB_PATH = path.join(__dirname, "../database/price.db.json");
+// SAFE PATH (IMPORTANT FIX)
+const DB_PATH = path.join(__dirname, "database/price.db.json");
 
 // =======================
-// SAFE DB
-let DB_CACHE = null;
-
+// SAFE DB LOADER
 function loadDB() {
   try {
-    DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-    if (!DB_CACHE.categories) DB_CACHE.categories = [];
-  } catch {
-    DB_CACHE = { categories: [] };
+    if (!fs.existsSync(DB_PATH)) {
+      fs.writeFileSync(DB_PATH, JSON.stringify({ categories: [] }, null, 2));
+    }
+    return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
+  } catch (e) {
+    return { categories: [] };
   }
-  return DB_CACHE;
-}
-
-function saveDB(data) {
-  DB_CACHE = data;
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
 // =======================
-// ADMIN (FIXED - ALWAYS LOADS)
-const adminPath = path.join(__dirname, "../admin");
+// STATIC ADMIN SAFE
+const adminPath = path.join(__dirname, "admin");
 
-app.use("/admin", express.static(adminPath));
-app.get("/admin/*", (req, res) => {
-  res.sendFile(path.join(adminPath, "index.html"));
-});
+if (fs.existsSync(adminPath)) {
+  app.use("/admin", express.static(adminPath));
+  app.get("/admin/*", (req, res) => {
+    res.sendFile(path.join(adminPath, "index.html"));
+  });
+}
 
 // =======================
-// USER STATE SAFE
+// STATE
 const userState = {};
 
 // =======================
-// CLEAN TEXT
+// CLEAN
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦🧾]/g, "")
@@ -53,7 +49,7 @@ function clean(msg) {
 }
 
 // =======================
-// VIBER SEND
+// VIBER SEND SAFE
 async function send(userId, text, keyboard = null) {
   try {
     await axios.post(
@@ -104,20 +100,20 @@ app.post("/webhook", async (req, res) => {
     if (body.event !== "message") return res.sendStatus(200);
 
     const uid = body.sender.id;
-    const msg = clean(body.message.text || "");
+    const msg = clean(body.message.text);
     const db = loadDB();
 
     if (!userState[uid]) userState[uid] = {};
     const st = userState[uid];
 
-    // ================= RESET
+    // RESET
     if (["hi", "hello", "menu", "start"].includes(msg)) {
       userState[uid] = {};
       await send(uid, "📦 Main Menu", MAIN_MENU);
       return res.sendStatus(200);
     }
 
-    // ================= PRICE
+    // PRICE
     if (msg === "price") {
       st.mode = "price";
 
@@ -130,7 +126,7 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ================= CALC
+    // CALC
     if (msg === "calc") {
       st.mode = "calc";
 
@@ -143,7 +139,7 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ================= INVOICE
+    // INVOICE
     if (msg === "invoice") {
       st.mode = "invoice";
       st.cart = [];
@@ -157,19 +153,19 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ================= CATEGORY FIX (IMPORTANT)
+    // CATEGORY
     if (msg.includes("_cat_")) {
       const parts = msg.split("_");
       const mode = parts[0];
       const i = parts[2];
 
-      const cat = db.categories[i];
+      const cat = db.categories?.[i];
       if (!cat) return res.sendStatus(200);
 
       st.catIndex = i;
 
       const items = cat.items.map((it, idx) => ({
-        label: `📄 ${it.item} ${it.size || ""}`,
+        label: `📄 ${it.item}`,
         value: `${mode}_item_${i}_${idx}`
       }));
 
@@ -177,7 +173,7 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ================= ITEM FIX
+    // ITEM
     if (msg.includes("_item_")) {
       const parts = msg.split("_");
       const mode = parts[0];
@@ -189,24 +185,19 @@ app.post("/webhook", async (req, res) => {
 
       st.item = item;
 
-      // PRICE MODE
       if (mode === "price") {
         await send(uid,
 `📄 ${item.item}
-📏 ${item.size || "-"}
 💰 1S: ${item.s1}
-💰 2S: ${item.s2}`
-        );
+💰 2S: ${item.s2}`);
         return res.sendStatus(200);
       }
 
-      // CALC MODE
       if (mode === "calc") {
         st.step = "side";
 
         await send(uid,
 `📄 ${item.item}
-📏 ${item.size || "-"}
 
 🧮 Select Side`,
           kb([
@@ -218,40 +209,31 @@ app.post("/webhook", async (req, res) => {
         return res.sendStatus(200);
       }
 
-      // INVOICE MODE (SAFE)
       if (mode === "inv") {
         if (!st.cart) st.cart = [];
 
-        st.cart.push({
-          name: item.item,
-          size: item.size,
-          price: item.s1,
-          qty: 1
-        });
+        st.cart.push(item);
 
-        await send(uid, "✔ Added to Invoice");
+        await send(uid, "✔ Added");
         return res.sendStatus(200);
       }
     }
 
-    // ================= SIDE
+    // SIDE
     if (msg === "side_1" || msg === "side_2") {
       if (!st.item) return res.sendStatus(200);
 
       st.side = msg === "side_2" ? 2 : 1;
       st.step = "qty";
 
-      await send(uid, "📦 Enter Qty:");
+      await send(uid, "📦 Qty:");
       return res.sendStatus(200);
     }
 
-    // ================= QTY
+    // QTY
     if (st.step === "qty") {
       const qty = Number(msg);
-      if (!qty) {
-        await send(uid, "❌ number only");
-        return res.sendStatus(200);
-      }
+      if (!qty) return send(uid, "❌ number only");
 
       st.qty = qty;
 
@@ -260,42 +242,26 @@ app.post("/webhook", async (req, res) => {
 
       st.step = "charge";
 
-      await send(uid,
-`🧾 RESULT
-
-📄 ${st.item.item}
-📦 Qty: ${qty}
-💰 Sub: ${st.subtotal}
-
-➕ Charge?`);
+      await send(uid, `🧾 Sub: ${st.subtotal}`);
       return res.sendStatus(200);
     }
 
-    // ================= FINAL
+    // FINAL
     if (st.step === "charge") {
       const charge = Number(msg || 0);
       const total = st.subtotal + charge;
 
       userState[uid] = {};
 
-      await send(uid,
-`🧾 FINAL
-
-📄 ${st.item.item}
-📦 Qty: ${st.qty}
-💰 Sub: ${st.subtotal}
-➕ Charge: ${charge}
-
-🔥 TOTAL: ${total} Ks`);
-
+      await send(uid, `🔥 TOTAL: ${total} Ks`);
       return res.sendStatus(200);
     }
 
     await send(uid, "📦 Menu", MAIN_MENU);
     res.sendStatus(200);
 
-  } catch (err) {
-    console.log("WEBHOOK ERROR:", err.message);
+  } catch (e) {
+    console.log("CRASH FIXED:", e.message);
     res.sendStatus(200);
   }
 });
@@ -303,5 +269,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 STABLE FULL FIX SYSTEM RUNNING");
+  console.log("🚀 DEPLOY SAFE SYSTEM RUNNING");
 });
