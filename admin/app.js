@@ -6,118 +6,103 @@ async function load() {
 }
 
 // =======================
-// SAVE
-// =======================
 async function save() {
   await fetch('/api/save-v2', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      category: newCategory.value || category.value,
+      category: category.value,
       item: item.value,
       size: size.value,
-      paper: paper.value,
-      side: side.value,
-      price: price.value
+      gsm: gsm.value,
+      s1: s1.value,
+      s2: s2.value,
+      lamination: lam.value,
+      remark: remark.value
     })
   });
 
   item.value = "";
   size.value = "";
-  paper.value = "";
-  side.value = "";
-  price.value = "";
+  gsm.value = "";
+  s1.value = "";
+  s2.value = "";
+  lam.value = "";
+  remark.value = "";
 
   load();
 }
 
 // =======================
-// DELETE CATEGORY
-// =======================
-async function deleteCategory() {
-  await fetch('/api/delete-category', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ category: category.value })
-  });
-
-  load();
-}
-
-// =======================
-// EDIT ENABLE (SAFE)
-// =======================
-function openEdit(id) {
-  document.getElementById("edit_" + id).style.display = "block";
-}
-
-// =======================
-// SAVE EDIT
-// =======================
-async function saveEdit(id) {
-  const price = document.getElementById("input_" + id).value;
-
+async function updatePrice(id, price) {
   await fetch('/api/update-entry', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ entryId: id, price })
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, price })
   });
 
   load();
 }
 
 // =======================
-// DELETE ENTRY
-// =======================
-async function deleteEntry(id) {
+async function deleteItem(id) {
   await fetch('/api/delete-entry', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ entryId: id })
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id })
   });
 
   load();
 }
 
-// =======================
-// RENDER UI
 // =======================
 function render() {
   list.innerHTML = "";
 
   db.categories.forEach(c => {
 
-    let box = document.createElement("div");
-    box.className = "box";
+    let html = `
+      <div class="box">
+        <h3>📁 ${c.name}</h3>
 
-    box.innerHTML = `<div class="cat">📁 ${c.name}</div>`;
+        <table>
+          <tr>
+            <th>Item</th>
+            <th>Size</th>
+            <th>GSM</th>
+            <th>1S</th>
+            <th>2S</th>
+            <th>Lam</th>
+            <th>Remark</th>
+            <th>Action</th>
+          </tr>
+    `;
 
     c.items.forEach(i => {
+      html += `
+        <tr>
+          <td>${i.item}</td>
+          <td>${i.size}</td>
+          <td>${i.gsm}</td>
 
-      let html = `<div class="item"><b>${i.name}</b></div>`;
+          <td>
+            <input value="${i.s1}" onchange="updatePrice('${i.id}', this.value)">
+          </td>
 
-      i.entries?.forEach(e => {
+          <td>${i.s2 || "-"}</td>
+          <td>${i.lamination || "-"}</td>
+          <td>${i.remark || "-"}</td>
 
-        html += `
-          <div class="entry">
-            📏 ${e.size} | ${e.gsm}gsm | ${e.side} → 
-            <b>${e.price} Ks</b>
-
-            <button class="edit" onclick="openEdit('${e.id}')">✏️ Edit</button>
-            <button class="del" onclick="deleteEntry('${e.id}')">❌</button>
-
-            <div class="editBox" id="edit_${e.id}">
-              <input id="input_${e.id}" value="${e.price}">
-              <button class="save" onclick="saveEdit('${e.id}')">Save</button>
-            </div>
-          </div>
-        `;
-      });
-
-      box.innerHTML += html;
+          <td>
+            <button onclick="deleteItem('${i.id}')">❌</button>
+          </td>
+        </tr>
+      `;
     });
 
-    list.appendChild(box);
+    html += `</table></div>`;
+
+    list.innerHTML += html;
   });
 }
 

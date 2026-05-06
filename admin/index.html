@@ -1,109 +1,76 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>7Star POS PRO</title>
+  <title>7Star POS v8</title>
 
   <style>
     body {
       font-family: Arial;
       background: #eef1f6;
-      margin: 0;
       padding: 20px;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: auto;
-    }
-
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
     }
 
     .box {
       background: white;
       padding: 15px;
-      border-radius: 12px;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.08);
       margin-bottom: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
 
-    input, select {
-      padding: 8px;
-      margin: 5px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
+    input {
+      padding: 6px;
+      margin: 4px;
     }
 
     button {
-      padding: 8px 12px;
-      margin: 4px;
-      border: none;
-      border-radius: 6px;
+      padding: 6px 10px;
+      margin: 3px;
       cursor: pointer;
     }
 
-    .save { background: #2ecc71; color: white; }
-    .del { background: #e74c3c; color: white; }
-    .edit { background: #3498db; color: white; }
-
-    .cat {
-      font-weight: bold;
-      font-size: 18px;
+    table {
+      width: 100%;
+      border-collapse: collapse;
       margin-top: 10px;
-      color: #2c3e50;
     }
 
-    .item {
-      margin-left: 10px;
-      margin-top: 5px;
+    th, td {
+      border: 1px solid #ddd;
+      padding: 6px;
+      text-align: center;
+      font-size: 13px;
     }
 
-    .entry {
-      margin-left: 25px;
-      padding: 5px;
-      background: #f9f9f9;
-      border-radius: 6px;
-      margin-bottom: 5px;
-    }
-
-    .editBox {
-      display: none;
-      margin-top: 5px;
+    th {
+      background: #f5f5f5;
     }
   </style>
 </head>
 
 <body>
 
-<div class="container">
-
-<h2>📦 7Star PRICE CONTROL PRO</h2>
+<h2>📦 7Star PRICE CONTROL v8</h2>
 
 <div class="box">
 
-  <select id="category"></select>
-  <input id="newCategory" placeholder="new category">
-
-  <br>
-
+  <input id="category" placeholder="category">
   <input id="item" placeholder="item">
+
   <input id="size" placeholder="size">
-  <input id="paper" placeholder="gsm">
-  <input id="side" placeholder="side">
-  <input id="price" placeholder="price">
+  <input id="gsm" placeholder="gsm">
+  <input id="s1" placeholder="1 side price">
+  <input id="s2" placeholder="2 side price">
+  <input id="lam" placeholder="lamination">
+  <input id="remark" placeholder="remark">
 
   <br>
 
-  <button class="save" onclick="save()">💾 Save</button>
-  <button class="del" onclick="deleteCategory()">🗑 Category</button>
+  <button onclick="save()">💾 Save</button>
 
 </div>
 
 <div id="list"></div>
-
-</div>
 
 <script src="app.js"></script>
 
