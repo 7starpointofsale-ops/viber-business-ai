@@ -16,8 +16,6 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// VIBER SEND
-// =======================
 async function sendViberMessage(userId, text) {
   await axios.post("https://chatapi.viber.com/pa/send_message", {
     receiver: userId,
@@ -30,13 +28,6 @@ async function sendViberMessage(userId, text) {
   });
 }
 
-// =======================
-app.get("/", (req, res) => {
-  res.send("🔥 7Star PRO v2.1 RUNNING");
-});
-
-// =======================
-// WEBHOOK
 // =======================
 app.post("/webhook", async (req, res) => {
   const body = req.body;
@@ -52,18 +43,53 @@ app.post("/webhook", async (req, res) => {
     let reply = "";
 
     // =======================
-    // GREETING FIX ✅
+    // GREETING
     // =======================
-    const greetings = ["hi", "hello", "hey", "မင်္ဂလာပါ"];
-
-    if (greetings.includes(msg)) {
-      reply = "👋 7Star Printing မှ ကြိုဆိုပါတယ်\n\nလိုချင်တဲ့ service ရိုက်ထည့်ပါ (eg. Vinyl 3x6 2)";
+    if (["hi","hello","hey","မင်္ဂလာပါ"].includes(msg)) {
+      reply = "👋 Welcome to 7Star Printing\nType service (eg. Vinyl)";
       await sendViberMessage(userId, reply);
       return res.sendStatus(200);
     }
 
     // =======================
-    // CONFIRM STEP
+    // STEP: ASK SIZE
+    // =======================
+    if (session.step === "ask_size") {
+      session.data.size = msg;
+      session.step = "ask_qty";
+
+      reply = "🔢 Quantity ဘယ်နှစ်ခုလဲ?";
+      await sendViberMessage(userId, reply);
+      return res.sendStatus(200);
+    }
+
+    // =======================
+    // STEP: ASK QTY
+    // =======================
+    if (session.step === "ask_qty") {
+      session.data.qty = parseInt(msg) || 1;
+
+      const item = session.data.item;
+      const price = calculatePrice(item, session.data);
+
+      session.data.price = price;
+      session.step = "confirm";
+
+      reply = `🧾 Order Preview
+
+Service: ${item.name}
+Size: ${session.data.size}
+Qty: ${session.data.qty}
+Price: ${price} Ks
+
+Confirm? (yes / no)`;
+
+      await sendViberMessage(userId, reply);
+      return res.sendStatus(200);
+    }
+
+    // =======================
+    // CONFIRM
     // =======================
     if (session.step === "confirm") {
       if (msg === "yes") {
@@ -71,25 +97,20 @@ app.post("/webhook", async (req, res) => {
 
         reply = `✅ Order Confirmed
 ID: ${order.id}
-Service: ${order.service}
-Qty: ${order.qty}
 Price: ${order.price} Ks`;
 
-        resetSession(userId);
       } else {
-        reply = "❌ Order Cancelled";
-        resetSession(userId);
+        reply = "❌ Cancelled";
       }
 
+      resetSession(userId);
       await sendViberMessage(userId, reply);
       return res.sendStatus(200);
     }
 
     // =======================
-    // NORMAL FLOW
+    // DETECT SERVICE
     // =======================
-    const parsed = parseMessage(msg);
-
     let foundItem = null;
 
     db.categories.forEach(cat => {
@@ -101,33 +122,21 @@ Price: ${order.price} Ks`;
     });
 
     if (!foundItem) {
-      reply = "❌ Service မတွေ့ပါ\n\nဥပမာ:\nVinyl 3x6 2";
+      reply = "❌ Service မတွေ့ပါ";
       await sendViberMessage(userId, reply);
       return res.sendStatus(200);
     }
 
-    if (foundItem.type === "sqft" && !parsed.size) {
+    // save context
+    session.data.item = foundItem;
+
+    if (foundItem.type === "sqft") {
+      session.step = "ask_size";
       reply = "📏 Size ဘယ်လောက်လဲ? (eg. 3x6)";
-      await sendViberMessage(userId, reply);
-      return res.sendStatus(200);
+    } else {
+      session.step = "ask_qty";
+      reply = "🔢 Quantity ဘယ်နှစ်ခုလဲ?";
     }
-
-    const price = calculatePrice(foundItem, parsed);
-
-    session.step = "confirm";
-    session.data = {
-      service: foundItem.name,
-      qty: parsed.qty,
-      price
-    };
-
-    reply = `🧾 Order Preview
-
-Service: ${foundItem.name}
-Qty: ${parsed.qty}
-Price: ${price} Ks
-
-Confirm? (yes / no)`;
 
     await sendViberMessage(userId, reply);
   }
@@ -135,8 +144,7 @@ Confirm? (yes / no)`;
   res.sendStatus(200);
 });
 
-// =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("🚀 Running on " + PORT);
+  console.log("🚀 Running v3 on " + PORT);
 });
