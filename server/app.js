@@ -31,7 +31,7 @@ function loadDB() {
 }
 
 // =======================
-// DB SAVE
+// DB SAVE SAFE
 function saveDB(data) {
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
@@ -41,11 +41,12 @@ function saveDB(data) {
 }
 
 // =======================
-// ADMIN SAFE FIX (NO path-to-regexp crash)
+// ADMIN FIX (NO path-to-regexp CRASH)
+// 👉 SAFE ROUTE (IMPORTANT FIX)
 app.use("/admin", express.static(ADMIN_PATH));
 
-// IMPORTANT: wildcard safe
-app.get("/admin*", (req, res) => {
+// fallback route (SAFE REGEX)
+app.get(/^\/admin(\/.*)?$/, (req, res) => {
   const filePath = path.join(ADMIN_PATH, "index.html");
   if (fs.existsSync(filePath)) {
     res.sendFile(filePath);
@@ -133,7 +134,7 @@ app.post("/webhook", async (req, res) => {
     const st = userState[uid];
 
     // RESET
-    if (["hi", "hello", "menu", "start"].includes(msg)) {
+    if (["hi", "hello", "menu", "start", "home"].includes(msg)) {
       userState[uid] = {};
       await send(uid, "📦 Main Menu", MAIN_MENU);
       return res.sendStatus(200);
@@ -185,8 +186,8 @@ app.post("/webhook", async (req, res) => {
       const mode = parts[0];
       const i = Number(parts[2]);
 
-      const cat = db.categories[i];
-      if (!cat || !cat.items) return res.sendStatus(200);
+      const cat = db.categories?.[i];
+      if (!cat) return res.sendStatus(200);
 
       const items = cat.items.map((it, idx) => ({
         label: `📄 ${it.item} ${it.size || ""}`,
@@ -209,8 +210,8 @@ app.post("/webhook", async (req, res) => {
 
       st.item = item;
 
-      const s1 = Number(item.s1) || 0;
-      const s2 = Number(item.s2) || 0;
+      const s1 = Number(item.s1 || 0);
+      const s2 = Number(item.s2 || 0);
 
       if (mode === "price") {
         return send(uid,
@@ -250,7 +251,7 @@ app.post("/webhook", async (req, res) => {
       return send(uid, "📦 Qty:").then(() => res.sendStatus(200));
     }
 
-    // ================= QTY FIX
+    // ================= QTY FIX (NO NaN)
     if (st.step === "qty") {
       const qty = Number(msg);
       if (!qty) return send(uid, "❌ number only").then(() => res.sendStatus(200));
@@ -266,7 +267,7 @@ app.post("/webhook", async (req, res) => {
         .then(() => res.sendStatus(200));
     }
 
-    // ================= FINAL FIX (NO NaN)
+    // ================= FINAL FIX
     if (st.step === "charge") {
       const charge = Number(msg) || 0;
       const total = (Number(st.subtotal) || 0) + charge;
@@ -289,5 +290,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 PRO FINAL SYSTEM RUNNING (CLEAN + STABLE)");
+  console.log("🚀 PRO STABLE SYSTEM RUNNING");
 });
