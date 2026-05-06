@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Orders</title>
+</head>
+<body>
+
+<h2>📦 Orders</h2>
+
+<div id="orders"></div>
+
+<script>
+async function loadOrders() {
+  const res = await fetch('/api/orders');
+  const data = await res.json();
+
+  const box = document.getElementById("orders");
+  box.innerHTML = "";
+
+  data.orders.forEach(o => {
+    const div = document.createElement("div");
+    div.style.border = "1px solid #ccc";
+    div.style.margin = "10px";
+    div.style.padding = "10px";
+
+    div.innerHTML = `
+      <b>${o.id}</b><br>
+      ${o.service}<br>
+      Qty: ${o.qty}<br>
+      Price: ${o.price} Ks<br>
+      Status: ${o.status}<br>
+
+      <select onchange="updateStatus('${o.id}', this.value)">
+        <option ${o.status==="NEW"?"selected":""}>NEW</option>
+        <option ${o.status==="DESIGN"?"selected":""}>DESIGN</option>
+        <option ${o.status==="PRINT"?"selected":""}>PRINT</option>
+        <option ${o.status==="DONE"?"selected":""}>DONE</option>
+      </select>
+    `;
+
+    box.appendChild(div);
+  });
+}
+
+async function updateStatus(id, status) {
+  await fetch('/api/update-status', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id, status})
+  });
+
+  loadOrders();
+}
+
+loadOrders();
+</script>
+
+</body>
+</html>
