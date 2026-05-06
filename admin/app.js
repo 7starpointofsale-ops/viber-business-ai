@@ -5,6 +5,9 @@ async function load() {
   render();
 }
 
+// =======================
+// SAVE
+// =======================
 async function save() {
   await fetch('/api/save-v2', {
     method:'POST',
@@ -28,6 +31,9 @@ async function save() {
   load();
 }
 
+// =======================
+// DELETE CATEGORY
+// =======================
 async function deleteCategory() {
   await fetch('/api/delete-category', {
     method:'POST',
@@ -38,7 +44,19 @@ async function deleteCategory() {
   load();
 }
 
-async function updatePrice(id, price) {
+// =======================
+// EDIT ENABLE (SAFE)
+// =======================
+function openEdit(id) {
+  document.getElementById("edit_" + id).style.display = "block";
+}
+
+// =======================
+// SAVE EDIT
+// =======================
+async function saveEdit(id) {
+  const price = document.getElementById("input_" + id).value;
+
   await fetch('/api/update-entry', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -48,6 +66,9 @@ async function updatePrice(id, price) {
   load();
 }
 
+// =======================
+// DELETE ENTRY
+// =======================
 async function deleteEntry(id) {
   await fetch('/api/delete-entry', {
     method:'POST',
@@ -58,33 +79,45 @@ async function deleteEntry(id) {
   load();
 }
 
+// =======================
+// RENDER UI
+// =======================
 function render() {
   list.innerHTML = "";
 
   db.categories.forEach(c => {
 
-    let div = document.createElement("div");
-    div.className = "card";
+    let box = document.createElement("div");
+    box.className = "box";
 
-    div.innerHTML = `<div class="cat">📁 ${c.name}</div>`;
+    box.innerHTML = `<div class="cat">📁 ${c.name}</div>`;
 
     c.items.forEach(i => {
 
-      let html = `<b>${i.name}</b><br>`;
+      let html = `<div class="item"><b>${i.name}</b></div>`;
 
       i.entries?.forEach(e => {
+
         html += `
-          📏 ${e.size} | ${e.gsm}gsm | ${e.side}
-          <input value="${e.price}" onchange="updatePrice('${e.id}', this.value)">
-          <button onclick="deleteEntry('${e.id}')">❌</button>
-          <br>
+          <div class="entry">
+            📏 ${e.size} | ${e.gsm}gsm | ${e.side} → 
+            <b>${e.price} Ks</b>
+
+            <button class="edit" onclick="openEdit('${e.id}')">✏️ Edit</button>
+            <button class="del" onclick="deleteEntry('${e.id}')">❌</button>
+
+            <div class="editBox" id="edit_${e.id}">
+              <input id="input_${e.id}" value="${e.price}">
+              <button class="save" onclick="saveEdit('${e.id}')">Save</button>
+            </div>
+          </div>
         `;
       });
 
-      div.innerHTML += html;
+      box.innerHTML += html;
     });
 
-    list.appendChild(div);
+    list.appendChild(box);
   });
 }
 
