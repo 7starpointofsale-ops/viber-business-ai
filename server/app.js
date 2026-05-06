@@ -7,17 +7,17 @@ const app = express();
 app.use(express.json());
 
 // =======================
-// PATH
+// DB PATH
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// CACHE SAFE
+// SAFE DB
 let DB_CACHE = null;
 
 function loadDB() {
   try {
     DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-  } catch (e) {
+  } catch {
     DB_CACHE = { categories: [] };
   }
   return DB_CACHE;
@@ -28,52 +28,44 @@ function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-// auto refresh DB
-setInterval(() => {
-  try {
-    DB_CACHE = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-  } catch (e) {}
-}, 5000);
+// refresh cache
+setInterval(() => (DB_CACHE = null), 5000);
 
 // =======================
 // STATIC ADMIN
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
+// USER STATE SAFE
+const userState = {};
+
+// =======================
 // CLEAN
 function clean(msg) {
   return (msg || "")
-    .replace(/[📁📄💰🧮📦]/g, "")
-    .replace(/\u200B/g, "")
+    .replace(/[📁📄💰🧮📦🧾]/g, "")
     .replace(/\s+/g, " ")
     .toLowerCase()
     .trim();
 }
 
 // =======================
-// USER STATE
-const userState = {};
-
-// =======================
 // VIBER SEND
 async function send(userId, text, keyboard = null) {
-  const body = {
-    receiver: userId,
-    type: "text",
-    text
-  };
-
-  if (keyboard) body.keyboard = keyboard;
-
-  await axios.post(
-    "https://chatapi.viber.com/pa/send_message",
-    body,
-    {
-      headers: {
-        "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+  try {
+    await axios.post(
+      "https://chatapi.viber.com/pa/send_message",
+      {
+        receiver: userId,
+        type: "text",
+        text,
+        keyboard
+      },
+      {
+        headers: { "X-Viber-Auth-Token": process.env.VIBER_TOKEN }
       }
-    }
-  ).catch(() => {});
+    );
+  } catch {}
 }
 
 // =======================
@@ -92,157 +84,212 @@ function kb(items) {
 }
 
 // =======================
-// API - GET DB (ADMIN FIX)
-app.get("/api/prices", (req, res) => {
-  res.json(loadDB());
-});
+// MAIN MENU
+const MAIN_MENU = kb([
+  { label: "💰 ဈေးမေးမယ်", value: "price" },
+  { label: "🧮 ဈေးတွက်မယ်", value: "calc" },
+  { label: "🧾 Invoice", value: "invoice" }
+]);
 
 // =======================
-// SAVE
-app.post("/api/save-v2", (req, res) => {
-  const db = loadDB();
-  const b = req.body;
-
-  let cat = db.categories.find(c => c.name === b.category);
-
-  if (!cat) {
-    cat = { name: b.category, items: [] };
-    db.categories.push(cat);
-  }
-
-  cat.items.push({
-    id: Date.now().toString(),
-    item: b.item,
-    size: b.size,
-    gsm: b.gsm,
-    s1: Number(b.s1 || 0),
-    s2: Number(b.s2 || 0),
-    lamination: b.lamination || "-",
-    remark: b.remark || "-"
-  });
-
-  saveDB(db);
-  res.json({ ok: true });
-});
-
-// =======================
-// UPDATE PRICE
-app.post("/api/update-entry", (req, res) => {
-  const db = loadDB();
-  const { id, price } = req.body;
-
-  db.categories.forEach(c => {
-    c.items.forEach(i => {
-      if (i.id === id) {
-        i.s1 = Number(price);
-      }
-    });
-  });
-
-  saveDB(db);
-  res.json({ ok: true });
-});
-
-// =======================
-// DELETE
-app.post("/api/delete-entry", (req, res) => {
-  const db = loadDB();
-  const { id } = req.body;
-
-  db.categories.forEach(c => {
-    c.items = c.items.filter(i => i.id !== id);
-  });
-
-  saveDB(db);
-  res.json({ ok: true });
-});
-
-// =======================
-// VIBER BOT
+// WEBHOOK
 app.post("/webhook", async (req, res) => {
   const body = req.body;
   if (body.event !== "message") return res.sendStatus(200);
 
-  const userId = body.sender.id;
-  const msg = clean(body.message.text || "");
+  const uid = body.sender.id;
+  const msg = clean(body.message.text);
   const db = loadDB();
 
-  // RESET
-  if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
-    userState[userId] = {};
+  if (!userState[uid]) userState[uid] = {};
 
-    await send(userId,
-      "📦 7Star System\nSelect Service:",
-      kb([
-        { label: "💰 ဈေးမေးမယ်", value: "service_price" },
-        { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
-      ])
-    );
-    return res.sendStatus(200);
+  const st = userState[uid];
+
+  // ================= RESET
+  if (["hi", "hello", "menu", "start"].includes(msg)) {
+    userState[uid] = {};
+    return send(uid, "📦 Main Menu", MAIN_MENU).then(() => res.sendStatus(200));
   }
 
-  // MENU
-  if (msg === "service_price" || msg === "service_calc") {
-    userState[userId] = { mode: msg };
+  // ================= PRICE MODE
+  if (msg === "price") {
+    st.mode = "price";
 
     const cats = db.categories.map((c, i) => ({
       label: `📁 ${c.name}`,
-      value: `cat_${i}`
+      value: `price_cat_${i}`
     }));
 
-    await send(userId, "📁 Select Category", kb(cats));
-    return res.sendStatus(200);
+    return send(uid, "📁 Select Category", kb(cats)).then(() =>
+      res.sendStatus(200)
+    );
   }
 
-  // CATEGORY
-  if (msg.startsWith("cat_")) {
-    const i = Number(msg.split("_")[1]);
+  // ================= CALC MODE
+  if (msg === "calc") {
+    st.mode = "calc";
+    st.step = "cat";
+
+    const cats = db.categories.map((c, i) => ({
+      label: `📁 ${c.name}`,
+      value: `calc_cat_${i}`
+    }));
+
+    return send(uid, "🧮 Select Category", kb(cats)).then(() =>
+      res.sendStatus(200)
+    );
+  }
+
+  // ================= INVOICE MODE
+  if (msg === "invoice") {
+    st.mode = "invoice";
+    st.step = "cat";
+    st.cart = [];
+
+    const cats = db.categories.map((c, i) => ({
+      label: `📁 ${c.name}`,
+      value: `inv_cat_${i}`
+    }));
+
+    return send(uid, "🧾 Invoice Mode", kb(cats)).then(() =>
+      res.sendStatus(200)
+    );
+  }
+
+  // ================= CATEGORY
+  if (msg.includes("_cat_")) {
+    const [mode, , i] = msg.split("_");
     const cat = db.categories[i];
     if (!cat) return res.sendStatus(200);
 
+    st.catIndex = i;
+
     const items = cat.items.map((it, idx) => ({
-      label: `📄 ${it.item} ${it.size}`,
-      value: `item_${i}_${idx}`
+      label: `📄 ${it.item} ${it.size || ""}`,
+      value: `${mode}_item_${i}_${idx}`
     }));
 
-    await send(userId, `📁 ${cat.name}`, kb(items));
-    return res.sendStatus(200);
+    return send(uid, `📁 ${cat.name}`, kb(items)).then(() =>
+      res.sendStatus(200)
+    );
   }
 
-  // ITEM
-  if (msg.startsWith("item_")) {
-    const p = msg.split("_");
-    const item = db.categories[p[1]]?.items[p[2]];
+  // ================= ITEM SELECT
+  if (msg.includes("_item_")) {
+    const [mode, , ci, ii] = msg.split("_");
+    const item = db.categories[ci]?.items[ii];
     if (!item) return res.sendStatus(200);
 
-    userState[userId] = {
-      ...userState[userId],
-      item
-    };
+    st.item = item;
 
-    await send(userId,
-`📄 ${item.item}
+    // ================= PRICE MODE
+    if (mode === "price") {
+      return send(
+        uid,
+        `📄 ${item.item}
 📏 ${item.size}
-📦 ${item.gsm}
-
 💰 1S: ${item.s1}
 💰 2S: ${item.s2}`
-    );
+      ).then(() => res.sendStatus(200));
+    }
 
-    return res.sendStatus(200);
+    // ================= CALC MODE
+    if (mode === "calc") {
+      st.step = "side";
+
+      return send(
+        uid,
+`📄 ${item.item}
+📏 ${item.size}
+
+🧮 Select Side`,
+        kb([
+          { label: "1️⃣ One Side", value: "side_1" },
+          { label: "2️⃣ Two Side", value: "side_2" }
+        ])
+      ).then(() => res.sendStatus(200));
+    }
+
+    // ================= INVOICE MODE
+    if (mode === "inv") {
+      st.cart.push({
+        name: item.item,
+        size: item.size,
+        price: item.s1,
+        qty: 1,
+        total: item.s1
+      });
+
+      return send(uid, "✔ Added\n📦 Add more or type menu").then(() =>
+        res.sendStatus(200)
+      );
+    }
   }
 
-  // fallback
-  await send(userId, "📦 Select Service", kb([
-    { label: "💰 ဈေးမေးမယ်", value: "service_price" },
-    { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
-  ]));
+  // ================= SIDE
+  if (msg === "side_1" || msg === "side_2") {
+    if (!st.item) return res.sendStatus(200);
 
-  res.sendStatus(200);
+    st.side = msg === "side_2" ? 2 : 1;
+    st.step = "qty";
+
+    return send(uid, "📦 Enter Qty:").then(() => res.sendStatus(200));
+  }
+
+  // ================= QTY
+  if (st.step === "qty") {
+    const qty = Number(msg);
+    if (!qty) return send(uid, "❌ number only").then(() => res.sendStatus(200));
+
+    st.qty = qty;
+
+    const price = st.side === 2 ? st.item.s2 : st.item.s1;
+    st.subtotal = price * qty;
+
+    st.step = "charge";
+
+    return send(
+      uid,
+`🧾 RESULT
+
+📄 ${st.item.item}
+📦 Qty: ${qty}
+💰 Sub: ${st.subtotal}
+
+➕ Extra Charge? (0 if none)`
+    ).then(() => res.sendStatus(200));
+  }
+
+  // ================= FINAL
+  if (st.step === "charge") {
+    const charge = Number(msg || 0);
+
+    const total = st.subtotal + charge;
+
+    const result = `
+🧾 FINAL INVOICE
+
+📄 ${st.item.item}
+📦 Qty: ${st.qty}
+
+💰 Sub: ${st.subtotal}
+➕ Charge: ${charge}
+
+🔥 TOTAL: ${total} Ks
+`;
+
+    // reset
+    userState[uid] = {};
+
+    return send(uid, result).then(() => res.sendStatus(200));
+  }
+
+  // ================= FALLBACK
+  return send(uid, "📦 Menu", MAIN_MENU).then(() => res.sendStatus(200));
 });
 
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 FULL FIXED SYSTEM RUNNING");
+  console.log("🚀 STABLE V10 ALL-IN-ONE SYSTEM RUNNING");
 });
