@@ -32,7 +32,7 @@ async function sendViberMessage(userId, text) {
 
 // =======================
 app.get("/", (req, res) => {
-  res.send("🔥 7Star PRO v2 RUNNING");
+  res.send("🔥 7Star PRO v2.1 RUNNING");
 });
 
 // =======================
@@ -44,7 +44,7 @@ app.post("/webhook", async (req, res) => {
   if (body.event === "message") {
     const userId = body.sender.id;
     const text = body.message.text || "";
-    const msg = text.toLowerCase();
+    const msg = text.toLowerCase().trim();
 
     const session = getSession(userId);
     const db = JSON.parse(fs.readFileSync(DB_PATH));
@@ -52,7 +52,18 @@ app.post("/webhook", async (req, res) => {
     let reply = "";
 
     // =======================
-    // STEP: CONFIRM
+    // GREETING FIX ✅
+    // =======================
+    const greetings = ["hi", "hello", "hey", "မင်္ဂလာပါ"];
+
+    if (greetings.includes(msg)) {
+      reply = "👋 7Star Printing မှ ကြိုဆိုပါတယ်\n\nလိုချင်တဲ့ service ရိုက်ထည့်ပါ (eg. Vinyl 3x6 2)";
+      await sendViberMessage(userId, reply);
+      return res.sendStatus(200);
+    }
+
+    // =======================
+    // CONFIRM STEP
     // =======================
     if (session.step === "confirm") {
       if (msg === "yes") {
@@ -90,12 +101,11 @@ Price: ${order.price} Ks`;
     });
 
     if (!foundItem) {
-      reply = "❌ Service မတွေ့ပါ";
+      reply = "❌ Service မတွေ့ပါ\n\nဥပမာ:\nVinyl 3x6 2";
       await sendViberMessage(userId, reply);
       return res.sendStatus(200);
     }
 
-    // size required
     if (foundItem.type === "sqft" && !parsed.size) {
       reply = "📏 Size ဘယ်လောက်လဲ? (eg. 3x6)";
       await sendViberMessage(userId, reply);
@@ -104,7 +114,6 @@ Price: ${order.price} Ks`;
 
     const price = calculatePrice(foundItem, parsed);
 
-    // save to session (WAIT CONFIRM)
     session.step = "confirm";
     session.data = {
       service: foundItem.name,
