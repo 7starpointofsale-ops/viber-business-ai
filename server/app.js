@@ -73,7 +73,6 @@ const SERVICE_MENU = [
 ];
 
 // =======================
-// FIND ITEM
 function findItemSmart(db, msg) {
   let best = null;
   let score = 0;
@@ -108,14 +107,12 @@ app.post("/webhook", async (req, res) => {
   const db = loadDB();
 
   // =======================
-  // START
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
     await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
     return res.sendStatus(200);
   }
 
   // =======================
-  // PRICE MODE
   if (msg === "service_price") {
     const cats = db.categories.map((c, i) => ({
       label: `📁 ${c.name}`,
@@ -126,7 +123,6 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CALC MODE START
   if (msg === "service_calc") {
     userState[userId] = { mode: "calc" };
 
@@ -140,7 +136,6 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CATEGORY
   if (msg.startsWith("cat_")) {
     const index = Number(msg.replace("cat_", ""));
     const category = db.categories[index];
@@ -155,42 +150,34 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // ITEM CLICK
   if (msg.startsWith("item_")) {
     const parts = msg.split("_");
     const item = db.categories[parts[1]]?.items[parts[2]];
 
     const state = userState[userId];
 
-    // =======================
-    // CALC FLOW → STEP 1 (SELECT ITEM)
     if (state && state.mode === "calc") {
-
       userState[userId] = {
         mode: "calc_side",
         item
       };
 
-      const sideKb = kb([
-        { label: "1️⃣ One Side", value: "side_1" },
-        { label: "2️⃣ Two Side", value: "side_2" }
-      ]);
-
       await send(
         userId,
 `📄 ${item.item}
-📏 ${item.size}
-📦 ${item.gsm}
+📏 ${item.size} Size
+📦 ${item.gsm}g
 
 👉 Side ရွေးပါ`,
-        sideKb
+        kb([
+          { label: "1️⃣ One Side", value: "side_1" },
+          { label: "2️⃣ Two Side", value: "side_2" }
+        ])
       );
 
       return res.sendStatus(200);
     }
 
-    // =======================
-    // NORMAL PRICE VIEW
     await send(
       userId,
 `📄 ${item.item}
@@ -206,7 +193,6 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // SIDE SELECT
   if (msg.startsWith("side_")) {
     const state = userState[userId];
     if (!state || state.mode !== "calc_side") return res.sendStatus(200);
@@ -229,7 +215,6 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // QTY INPUT
   if (userState[userId] && userState[userId].mode === "calc_qty") {
 
     const qty = Number(msg);
@@ -249,10 +234,10 @@ app.post("/webhook", async (req, res) => {
 `🧾 RESULT
 
 📄 ${item.item}
-📏 ${item.size}
-📦 ${item.gsm}
+📏 ${item.size} Size
+📦 ${item.gsm}g
 🧾 ${state.side} Side
-📦 Qty: ${qty}
+📦 ${qty} pcs
 
 💰 Total: ${total} Ks`
     );
