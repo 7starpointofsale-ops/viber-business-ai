@@ -29,9 +29,12 @@ setInterval(() => {
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
+// CLEAN INPUT (SAFE)
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
+    .replace(/\u200B/g, "")
+    .replace(/\s+/g, " ")
     .toLowerCase()
     .trim();
 }
@@ -122,7 +125,15 @@ app.post("/webhook", async (req, res) => {
   const db = loadDB();
 
   // =======================
+  // RESET PROTECTION
+  if (!userState[userId] && msg === "back") {
+    await send(userId, "📦 Select Service", kb(SERVICE_MENU));
+    return res.sendStatus(200);
+  }
+
+  // =======================
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
+    userState[userId] = null;
     await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
     return res.sendStatus(200);
   }
@@ -184,7 +195,7 @@ app.post("/webhook", async (req, res) => {
 📏 ${sizeText}
 📦 ${item.gsm}g
 
-📦 Quick Select (1 tap fast)`,
+📦 Quick Select`,
         quickKb()
       );
 
@@ -205,7 +216,6 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // QUICK MODE
   if (msg.startsWith("q_")) {
     const state = userState[userId];
     if (!state?.item) return res.sendStatus(200);
@@ -235,17 +245,11 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CUSTOM QTY
   if (userState[userId]?.mode === "custom_qty") {
     const qty = Number(msg);
 
     if (!qty) {
-      if (msg === "back") {
-        delete userState[userId];
-        await send(userId, "📦 Select Service", kb(SERVICE_MENU));
-        return res.sendStatus(200);
-      }
-      await send(userId, "❌ number only");
+      await send(userId, "❌ number only (or back)");
       return res.sendStatus(200);
     }
 
@@ -282,11 +286,16 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  await send(userId, "📦 Select Service", kb(SERVICE_MENU));
+  // SAFE FALLBACK (NO LOOP BUG)
+  if (!userState[userId]) {
+    await send(userId, "📦 Select Service", kb(SERVICE_MENU));
+  }
+
   res.sendStatus(200);
 });
 
+// =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 FULL FIXED BOT RUNNING");
+  console.log("🚀 FINAL STABLE BOT RUNNING");
 });
