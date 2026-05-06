@@ -132,6 +132,39 @@
           "lamination": 1000
         }
       ]
+    },
+
+    {
+      "name": "Bond",
+      "items": [
+        { "item": "100 တံဆိပ်ခေါင်း", "size": "-", "gsm": "-", "s1": 3000, "s2": 3000, "lamination": "-" },
+        { "item": "200 တံဆိပ်ခေါင်း", "size": "-", "gsm": "-", "s1": 3000, "s2": 3000, "lamination": "-" },
+        { "item": "250 တံဆိပ်ခေါင်း", "size": "-", "gsm": "-", "s1": 3000, "s2": 3000, "lamination": "-" },
+        { "item": "300 တံဆိပ်ခေါင်း", "size": "-", "gsm": "-", "s1": 3500, "s2": 3500, "lamination": "-" },
+        { "item": "400 တံဆိပ်ခေါင်း", "size": "-", "gsm": "-", "s1": 3500, "s2": 3500, "lamination": "-" },
+        { "item": "500 တံဆိပ်ခေါင်း", "size": "-", "gsm": "-", "s1": 3500, "s2": 3500, "lamination": "-" },
+        { "item": "600 တံဆိပ်ခေါင်း", "size": "-", "gsm": "-", "s1": 4000, "s2": 4000, "lamination": "-" },
+        { "item": "1000 တံဆိပ်ခေါင်း", "size": "-", "gsm": "-", "s1": 4000, "s2": 4000, "lamination": "-" }
+      ]
+    },
+
+    {
+      "name": "Business Card လိပ်စာကတ်",
+      "items": [
+        { "item": "ကြောင်ခြစ်(Epson)", "size": "50 pcs", "gsm": "-", "s1": 13000, "s2": 16000, "lamination": "-" },
+        { "item": "ကြောင်ခြစ်(Epson)", "size": "1 box", "gsm": "-", "s1": 16000, "s2": 21000, "lamination": "-" },
+        { "item": "Art Card 250g", "size": "1 box", "gsm": "-", "s1": 15000, "s2": 22000, "lamination": "-" },
+        { "item": "Art Card 250g + Lamination", "size": "1 box", "gsm": "-", "s1": 18000, "s2": 26000, "lamination": "yes" },
+        { "item": "Art Card 250g + Plastic", "size": "1 box", "gsm": "-", "s1": 28000, "s2": 35000, "lamination": "plastic" },
+        { "item": "Art Card 300g", "size": "1 box", "gsm": "-", "s1": 17000, "s2": 24000, "lamination": "-" },
+        { "item": "Art Card 300g +", "size": "1 box", "gsm": "-", "s1": 20000, "s2": 29000, "lamination": "-" },
+        { "item": "Art Card 300g + Plastic", "size": "1 box", "gsm": "-", "s1": 31000, "s2": 37000, "lamination": "plastic" },
+        { "item": "Art Card 350g", "size": "1 box", "gsm": "-", "s1": 23000, "s2": 34000, "lamination": "-" },
+        { "item": "Art Card 350g + Lamination", "size": "1 box", "gsm": "-", "s1": 28000, "s2": 39000, "lamination": "yes" },
+        { "item": "Art Card 350g + Plastic", "size": "1 box", "gsm": "-", "s1": 36000, "s2": 47000, "lamination": "plastic" },
+        { "item": "White Card 250g", "size": "1 box", "gsm": "-", "s1": 18000, "s2": 29000, "lamination": "-" },
+        { "item": "AQ, HX, ...", "size": "1 box", "gsm": "-", "s1": 23000, "s2": 34000, "lamination": "-" }
+      ]
     }
   ]
 }
