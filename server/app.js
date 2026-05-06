@@ -25,42 +25,53 @@ function clean(msg) {
 }
 
 // =======================
-async function send(userId, text, keyboard = null) {
-  const body = {
-    receiver: userId,
-    type: "text",
-    text
-  };
-
-  if (keyboard) body.keyboard = keyboard;
-
-  try {
-    await axios.post(
-      "https://chatapi.viber.com/pa/send_message",
-      body,
-      {
-        headers: {
-          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
-        }
+// 🔥 PREMIUM CAROUSEL SEND
+// =======================
+async function sendCarousel(userId, items) {
+  await axios.post(
+    "https://chatapi.viber.com/pa/send_message",
+    {
+      receiver: userId,
+      type: "rich_media",
+      rich_media: {
+        Type: "rich_media",
+        ButtonsGroupColumns: 6,
+        ButtonsGroupRows: 7,
+        BgColor: "#1E1E2F",
+        Buttons: items.map(i => ({
+          Columns: 6,
+          Rows: 2,
+          ActionType: "reply",
+          ActionBody: i.value,
+          Text: `<font color="#FFFFFF"><b>${i.label}</b></font>`,
+          TextSize: "medium",
+          BgColor: "#2A2A40"
+        }))
       }
-    );
-  } catch (e) {
-    console.log("Viber Error:", e.message);
-  }
+    },
+    {
+      headers: {
+        "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+      }
+    }
+  );
 }
 
 // =======================
-function kb(items) {
-  return {
-    Type: "keyboard",
-    Buttons: items.map(i => ({
-      ActionType: "reply",
-      ActionBody: i.value,
-      Text: i.label,
-      Columns: 6,
-      Rows: 1
-    }))
-  };
+async function send(userId, text) {
+  await axios.post(
+    "https://chatapi.viber.com/pa/send_message",
+    {
+      receiver: userId,
+      type: "text",
+      text
+    },
+    {
+      headers: {
+        "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+      }
+    }
+  );
 }
 
 // =======================
@@ -75,33 +86,31 @@ app.post("/webhook", async (req, res) => {
   if (body.event !== "message") return res.sendStatus(200);
 
   const userId = body.sender.id;
-  const rawMsg = body.message.text || "";
-  const msg = clean(rawMsg);
-
+  const msg = clean(body.message.text || "");
   const db = loadDB();
 
   // =======================
   // START
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
-    await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
+    await sendCarousel(userId, SERVICE_MENU);
     return res.sendStatus(200);
   }
 
   // =======================
-  // SERVICE → CATEGORY
+  // CATEGORY
   if (msg === "service_price") {
 
     const cats = db.categories.map((c, i) => ({
-      label: `📁 ${c.name}`,
-      value: "cat_" + i   // 🔥 ID BASED
+      label: c.name,
+      value: "cat_" + i
     }));
 
-    await send(userId, "📁 Select Category", kb(cats));
+    await sendCarousel(userId, cats);
     return res.sendStatus(200);
   }
 
   // =======================
-  // CATEGORY CLICK (FIXED 100%)
+  // CATEGORY CLICK
   if (msg.startsWith("cat_")) {
 
     const index = Number(msg.replace("cat_", ""));
@@ -113,24 +122,20 @@ app.post("/webhook", async (req, res) => {
     }
 
     const items = category.items.map((i, idx) => ({
-      label: `📄 ${i.item} ${i.size || ""} ${i.gsm || ""}`,
-      value: `item_${index}_${idx}`   // 🔥 ID BASED
+      label: `${i.item} ${i.size} ${i.gsm}`,
+      value: `item_${index}_${idx}`
     }));
 
-    await send(userId, `📁 ${category.name}`, kb(items));
+    await sendCarousel(userId, items);
     return res.sendStatus(200);
   }
 
   // =======================
-  // ITEM CLICK (FIXED 100%)
+  // ITEM CLICK
   if (msg.startsWith("item_")) {
 
-    const parts = msg.split("_");
-    const catIndex = Number(parts[1]);
-    const itemIndex = Number(parts[2]);
-
-    const category = db.categories[catIndex];
-    const item = category?.items[itemIndex];
+    const [_, c, i] = msg.split("_");
+    const item = db.categories[c]?.items[i];
 
     if (!item) {
       await send(userId, "❌ Item error");
@@ -141,8 +146,8 @@ app.post("/webhook", async (req, res) => {
       userId,
 `📄 ${item.item}
 
-📏 Size: ${item.size || "-"}
-📦 GSM: ${item.gsm || "-"}
+📏 Size: ${item.size}
+📦 GSM: ${item.gsm}
 
 💰 1 side: ${item.s1}
 💰 2 side: ${item.s2}`
@@ -152,7 +157,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // CALCULATOR
+  // CALC
   if (/^[0-9+\-*/().\s]+$/.test(msg)) {
     try {
       const r = eval(msg);
@@ -162,7 +167,7 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  await send(userId, "📦 Select Service", kb(SERVICE_MENU));
+  await sendCarousel(userId, SERVICE_MENU);
   res.sendStatus(200);
 });
 
@@ -170,5 +175,5 @@ app.post("/webhook", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V12 FINAL STABLE RUNNING");
+  console.log("🚀 V13 PREMIUM UI RUNNING");
 });
