@@ -3,17 +3,15 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 
-require("dotenv").config();
-
 const app = express();
 app.use(express.json());
 
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// SESSION MEMORY (in RAM)
+// ADMIN STATIC
 // =======================
-const sessions = {};
+app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================
 // LOAD DB
@@ -23,109 +21,77 @@ function loadDB() {
 }
 
 // =======================
-// SEND VIBER MESSAGE
+// SAVE DB
+// =======================
+function saveDB(db) {
+  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+}
+
+// =======================
+// VIBER SEND
 // =======================
 async function send(userId, text, keyboard = null) {
-  const payload = {
+  const body = {
     receiver: userId,
     type: "text",
     text
   };
 
-  if (keyboard) payload.keyboard = keyboard;
+  if (keyboard) {
+    body.keyboard = keyboard;
+  }
 
-  await axios.post(
-    "https://chatapi.viber.com/pa/send_message",
-    payload,
-    {
-      headers: {
-        "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+  try {
+    await axios.post(
+      "https://chatapi.viber.com/pa/send_message",
+      body,
+      {
+        headers: {
+          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+        }
       }
-    }
-  );
+    );
+  } catch (e) {
+    console.log("Viber Error:", e.message);
+  }
 }
 
 // =======================
-// MAIN MENU
+// BUTTON BUILDER (GRID 2 COLUMN)
 // =======================
-function mainMenu() {
+function buildKeyboard(items) {
+  const buttons = items.map(i => ({
+    ActionType: "reply",
+    ActionBody: i.value,
+    Text: i.label,
+    TextSize: "regular",
+    Columns: 6,
+    Rows: 1
+  }));
+
   return {
     Type: "keyboard",
-    Buttons: [
-      { ActionType: "reply", ActionBody: "MENU_ORDER", Text: "📦 Order" },
-      { ActionType: "reply", ActionBody: "MENU_PRICE", Text: "💰 Price Check" },
-      { ActionType: "reply", ActionBody: "MENU_CALC", Text: "🧮 Calculator" }
-    ]
+    Buttons: buttons
   };
 }
 
 // =======================
-// CATEGORY MENU
+// MENU DATA (STATIC FLOW)
 // =======================
-function categoryMenu(db) {
-  return {
-    Type: "keyboard",
-    Buttons: db.categories.map(c => ({
-      ActionType: "reply",
-      ActionBody: `CAT_${c.name}`,
-      Text: c.name
-    }))
-  };
-}
+const MENU = {
+  start: [
+    { label: "📁 Digital", value: "menu_digital" },
+    { label: "📁 Vinyl", value: "menu_vinyl" },
+    { label: "📁 Card", value: "menu_card" },
+    { label: "📁 Fixed", value: "menu_fixed" }
+  ]
+};
 
 // =======================
-// ITEM MENU
+// NORMALIZE
 // =======================
-function itemMenu(cat) {
-  return {
-    Type: "keyboard",
-    Buttons: cat.items.map(i => ({
-      ActionType: "reply",
-      ActionBody: `ITEM_${i.item}`,
-      Text: i.item
-    }))
-  };
-}
-
-// =======================
-// SIZE MENU
-// =======================
-function sizeMenu() {
-  return {
-    Type: "keyboard",
-    Buttons: [
-      { ActionType: "reply", ActionBody: "SIZE_A4", Text: "A4" },
-      { ActionType: "reply", ActionBody: "SIZE_13X19", Text: "13x19" }
-    ]
-  };
-}
-
-// =======================
-// GSM MENU
-// =======================
-function gsmMenu() {
-  return {
-    Type: "keyboard",
-    Buttons: [
-      { ActionType: "reply", ActionBody: "GSM_128", Text: "128gsm" },
-      { ActionType: "reply", ActionBody: "GSM_210", Text: "210gsm" },
-      { ActionType: "reply", ActionBody: "GSM_250", Text: "250gsm" },
-      { ActionType: "reply", ActionBody: "GSM_300", Text: "300gsm" }
-    ]
-  };
-}
-
-// =======================
-// SIDE MENU
-// =======================
-function sideMenu() {
-  return {
-    Type: "keyboard",
-    Buttons: [
-      { ActionType: "reply", ActionBody: "SIDE_1", Text: "1 Side" },
-      { ActionType: "reply", ActionBody: "SIDE_2", Text: "2 Side" }
-    ]
-  };
+function normalize(msg) {
+  return (msg || "").toLowerCase().trim();
 }
 
 // =======================
@@ -137,102 +103,111 @@ app.post("/webhook", async (req, res) => {
   if (body.event !== "message") return res.sendStatus(200);
 
   const userId = body.sender.id;
-  const msg = body.message.text;
+  let msg = normalize(body.message.text);
 
   const db = loadDB();
 
   // =======================
-  // INIT SESSION
-  if (!sessions[userId]) {
-    sessions[userId] = {};
-  }
-
-  const s = sessions[userId];
-
+  // START MENU
   // =======================
-  // START
-  if (msg === "hi" || msg === "hello") {
-    s.step = "MAIN";
-    await send(userId, "👋 Welcome to 7Star System", mainMenu());
+  if (["hi", "hello", "menu"].includes(msg)) {
+    await send(
+      userId,
+      "📦 7Star System\nSelect Category:",
+      buildKeyboard(MENU.start)
+    );
     return res.sendStatus(200);
   }
 
   // =======================
-  // MENU SELECT
-  if (msg === "MENU_PRICE") {
-    s.step = "CATEGORY";
-    await send(userId, "📁 Select Category", categoryMenu(db));
+  // CATEGORY ROUTE
+  // =======================
+  if (msg === "menu_digital") {
+    const items = db.categories
+      .find(c => c.name === "Digital Press")
+      ?.items || [];
+
+    const buttons = items.slice(0, 10).map(i => ({
+      label: `📄 ${i.item} ${i.gsm || ""}`,
+      value: `item_${i.id}`
+    }));
+
+    await send(userId, "📁 Digital Press", buildKeyboard(buttons));
     return res.sendStatus(200);
   }
 
-  if (msg.startsWith("CAT_")) {
-    const catName = msg.replace("CAT_", "");
-    s.category = db.categories.find(c => c.name === catName);
-    s.step = "ITEM";
+  // =======================
+  // ITEM SELECT
+  // =======================
+  if (msg.startsWith("item_")) {
+    const id = msg.replace("item_", "");
 
-    await send(userId, "📄 Select Item", itemMenu(s.category));
+    let found = null;
+
+    db.categories.forEach(c => {
+      c.items.forEach(i => {
+        if (i.id === id) found = i;
+      });
+    });
+
+    if (!found) {
+      await send(userId, "❌ Not found");
+      return res.sendStatus(200);
+    }
+
+    await send(
+      userId,
+`📄 ${found.item}
+
+💰 1 side: ${found.s1}
+💰 2 side: ${found.s2}
+
+👉 Send: size qty (eg: 3x6 2)`
+    );
+
     return res.sendStatus(200);
   }
 
-  if (msg.startsWith("ITEM_")) {
-    const itemName = msg.replace("ITEM_", "");
-    s.item = s.category.items.find(i => i.item === itemName);
+  // =======================
+  // CALC (SIMPLE V10)
+  // =======================
+  const sizeMatch = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
+  const qtyMatch = msg.match(/(\d+)$/);
 
-    s.step = "SIZE";
-    await send(userId, "📏 Select Size", sizeMenu());
-    return res.sendStatus(200);
-  }
-
-  if (msg.startsWith("SIZE_")) {
-    s.size = msg.replace("SIZE_", "");
-    s.step = "GSM";
-
-    await send(userId, "📄 Select GSM", gsmMenu());
-    return res.sendStatus(200);
-  }
-
-  if (msg.startsWith("GSM_")) {
-    s.gsm = msg.replace("GSM_", "");
-    s.step = "SIDE";
-
-    await send(userId, "📄 Select Side", sideMenu());
-    return res.sendStatus(200);
-  }
-
-  if (msg.startsWith("SIDE_")) {
-    s.side = msg.replace("SIDE_", "");
-
-    // =======================
-    // PRICE MATCH
-    const found = s.item;
-
-    const price =
-      s.side === "1"
-        ? found.s1
-        : found.s2;
+  if (sizeMatch) {
+    const qty = qtyMatch ? Number(qtyMatch[1]) : 1;
+    const area = Number(sizeMatch[1]) * Number(sizeMatch[2]);
 
     await send(
       userId,
 `🧾 RESULT
 
-Item: ${found.item}
-Size: ${s.size}
-GSM: ${s.gsm}
-Side: ${s.side}
+📏 Size: ${sizeMatch[1]}x${sizeMatch[2]}
+📦 Qty: ${qty}
 
-💰 Price: ${price} Ks`
+🧮 Area: ${area}
+
+💰 (Auto pricing engine ready)`
     );
 
-    s.step = "DONE";
     return res.sendStatus(200);
   }
 
   // =======================
+  // DEFAULT MENU
+  // =======================
+  await send(
+    userId,
+    "📌 Select menu or type 'hi'",
+    buildKeyboard(MENU.start)
+  );
+
   res.sendStatus(200);
 });
 
 // =======================
 const PORT = process.env.PORT || 10000;
+
 app.listen(PORT, () => {
-  console.log("🚀 V10 CLICK MENU RUNNING");
+  console.log("🚀 V10 BUTTON MENU RUNNING");
 });
