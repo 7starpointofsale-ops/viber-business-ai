@@ -21,6 +21,16 @@ function loadDB() {
 }
 
 // =======================
+// CLEAN INPUT
+// =======================
+function clean(msg) {
+  return (msg || "")
+    .replace(/[📁📄💰🧮📦]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+// =======================
 // VIBER SEND
 // =======================
 async function send(userId, text, keyboard = null) {
@@ -48,21 +58,8 @@ async function send(userId, text, keyboard = null) {
 }
 
 // =======================
-// CLEAN INPUT (FIX ALL BUGS)
-// =======================
-function clean(msg) {
-  return (msg || "")
-    .replace(/[📁📄💰🧮📦]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-// =======================
-// SESSION (simple RAM)
-const session = {};
-
-// =======================
 // KEYBOARD BUILDER
+// =======================
 function kb(items) {
   return {
     Type: "keyboard",
@@ -79,6 +76,7 @@ function kb(items) {
 
 // =======================
 // SERVICE MENU
+// =======================
 const SERVICE_MENU = [
   { label: "💰 ဈေးမေးမယ်", value: "service_price" },
   { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" },
@@ -93,7 +91,7 @@ app.post("/webhook", async (req, res) => {
   if (body.event !== "message") return res.sendStatus(200);
 
   const userId = body.sender.id;
-  const rawMsg = body.message.text;
+  const rawMsg = body.message.text || "";
   const msg = clean(rawMsg);
 
   const db = loadDB();
@@ -101,16 +99,8 @@ app.post("/webhook", async (req, res) => {
   // =======================
   // START MENU
   // =======================
-  if (["hi", "hello", "menu", "start"].includes(msg)) {
-
-    session[userId] = { step: "service" };
-
-    await send(
-      userId,
-      "📦 7Star System\nSelect Service:",
-      kb(SERVICE_MENU)
-    );
-
+  if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
+    await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
     return res.sendStatus(200);
   }
 
@@ -119,11 +109,9 @@ app.post("/webhook", async (req, res) => {
   // =======================
   if (msg.includes("ဈေးမေးမယ်") || msg === "service_price") {
 
-    session[userId] = { step: "category" };
-
     const cats = db.categories.map(c => ({
       label: `📁 ${c.name}`,
-      value: `cat_${c.name}`
+      value: c.name
     }));
 
     await send(userId, "📁 Select Category", kb(cats));
@@ -131,70 +119,51 @@ app.post("/webhook", async (req, res) => {
   }
 
   if (msg.includes("ဈေးတွက်မယ်") || msg === "service_calc") {
-    session[userId] = { step: "calc" };
-    await send(userId, "🧮 Send formula (eg: 2+2)");
+    await send(userId, "🧮 Send math (eg: 2+2)");
     return res.sendStatus(200);
   }
 
-  if (msg.includes("order") || msg === "service_order") {
-    session[userId] = { step: "order" };
+  if (msg.includes("order")) {
     await send(userId, "📦 Order system coming soon");
     return res.sendStatus(200);
   }
 
   // =======================
-  // CATEGORY CLICK (FIXED SAFE MATCH)
+  // CATEGORY CLICK (FIXED)
   // =======================
-  if (msg.startsWith("cat_") || msg.includes("digital press") || msg.includes("vinyl")) {
+  const category = db.categories.find(c =>
+    c.name.toLowerCase() === msg
+  );
 
-    let catName = msg.replace("cat_", "");
+  if (category) {
 
-    const cat = db.categories.find(c =>
-      c.name.toLowerCase() === catName.toLowerCase()
-    );
-
-    if (!cat) {
-      await send(userId, "❌ Category not found");
-      return res.sendStatus(200);
-    }
-
-    const items = cat.items.map(i => ({
+    const items = category.items.map(i => ({
       label: `📄 ${i.item} ${i.size || ""} ${i.gsm || ""}`,
-      value: `item_${i.id}`
+      value: i.id   // 🔥 IMPORTANT FIX
     }));
 
-    await send(userId, `📁 ${cat.name}`, kb(items));
+    await send(userId, `📁 ${category.name}`, kb(items));
     return res.sendStatus(200);
   }
 
   // =======================
-  // ITEM CLICK (SAFE ID MATCH)
+  // ITEM CLICK (FIXED - NO PREFIX BUG)
   // =======================
-  if (msg.startsWith("item_")) {
+  const item = db.categories
+    .flatMap(c => c.items)
+    .find(i => i.id === msg);
 
-    const id = msg.replace("item_", "");
-    let found = null;
-
-    db.categories.forEach(c => {
-      c.items.forEach(i => {
-        if (i.id === id) found = i;
-      });
-    });
-
-    if (!found) {
-      await send(userId, "❌ Item not found");
-      return res.sendStatus(200);
-    }
+  if (item) {
 
     await send(
       userId,
-`📄 ${found.item}
+`📄 ${item.item}
 
-📏 Size: ${found.size || "-"}
-📦 GSM: ${found.gsm || "-"}
+📏 Size: ${item.size || "-"}
+📦 GSM: ${item.gsm || "-"}
 
-💰 1 side: ${found.s1}
-💰 2 side: ${found.s2}
+💰 1 side: ${item.s1}
+💰 2 side: ${item.s2}
 
 👉 send: size qty (eg: 3x6 2)`
     );
@@ -214,14 +183,13 @@ app.post("/webhook", async (req, res) => {
   }
 
   // =======================
-  // SIZE CALC
+  // SIZE CALC (BASIC)
   // =======================
   const size = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
   const qty = msg.match(/(\d+)$/);
 
   if (size) {
     const q = qty ? Number(qty[1]) : 1;
-    const area = Number(size[1]) * Number(size[2]);
 
     await send(
       userId,
@@ -229,22 +197,17 @@ app.post("/webhook", async (req, res) => {
 
 📏 Size: ${size[1]}x${size[2]}
 📦 Qty: ${q}
-🧮 Area: ${area}
 
-💡 pricing engine next`
+💡 Processing...`
     );
 
     return res.sendStatus(200);
   }
 
   // =======================
-  // DEFAULT MENU (SAFE)
+  // DEFAULT MENU
   // =======================
-  await send(
-    userId,
-    "📦 Select Service",
-    kb(SERVICE_MENU)
-  );
+  await send(userId, "📦 Select Service", kb(SERVICE_MENU));
 
   res.sendStatus(200);
 });
@@ -253,5 +216,5 @@ app.post("/webhook", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V12 STABLE FULL SYSTEM RUNNING");
+  console.log("🚀 V12 FIXED FULL SYSTEM RUNNING");
 });
