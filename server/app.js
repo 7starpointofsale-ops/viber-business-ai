@@ -7,35 +7,96 @@ const app = express();
 app.use(express.json());
 
 // =======================
-// SAFE PATH (IMPORTANT FIX)
+// PATHS
 const DB_PATH = path.join(__dirname, "database/price.db.json");
+const ADMIN_PATH = path.join(__dirname, "admin");
 
 // =======================
-// SAFE DB LOADER
+// SAFE DB
 function loadDB() {
   try {
     if (!fs.existsSync(DB_PATH)) {
       fs.writeFileSync(DB_PATH, JSON.stringify({ categories: [] }, null, 2));
     }
     return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
-  } catch (e) {
+  } catch {
     return { categories: [] };
   }
 }
 
-// =======================
-// STATIC ADMIN SAFE
-const adminPath = path.join(__dirname, "admin");
-
-if (fs.existsSync(adminPath)) {
-  app.use("/admin", express.static(adminPath));
-  app.get("/admin/*", (req, res) => {
-    res.sendFile(path.join(adminPath, "index.html"));
-  });
+function saveDB(data) {
+  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
 // =======================
-// STATE
+// ADMIN STATIC FIX (IMPORTANT)
+app.use("/admin", express.static(ADMIN_PATH));
+
+app.get("/admin/*", (req, res) => {
+  res.sendFile(path.join(ADMIN_PATH, "index.html"));
+});
+
+// =======================
+// API (ADMIN WORKING FIX)
+app.get("/api/prices", (req, res) => {
+  res.json(loadDB());
+});
+
+app.post("/api/save-v2", (req, res) => {
+  const db = loadDB();
+
+  const { category, item, size, gsm, s1, s2, lamination, remark } = req.body;
+
+  let cat = db.categories.find(c => c.name === category);
+
+  if (!cat) {
+    cat = { name: category, items: [] };
+    db.categories.push(cat);
+  }
+
+  cat.items.push({
+    id: Date.now().toString(),
+    item,
+    size,
+    gsm,
+    s1: Number(s1 || 0),
+    s2: Number(s2 || 0),
+    lamination,
+    remark
+  });
+
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.post("/api/update-entry", (req, res) => {
+  const db = loadDB();
+
+  for (let c of db.categories) {
+    for (let i of c.items) {
+      if (i.id === req.body.id) {
+        i.s1 = Number(req.body.price);
+      }
+    }
+  }
+
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.post("/api/delete-entry", (req, res) => {
+  const db = loadDB();
+
+  db.categories.forEach(c => {
+    c.items = c.items.filter(i => i.id !== req.body.id);
+  });
+
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+// =======================
+// USER STATE
 const userState = {};
 
 // =======================
@@ -49,7 +110,7 @@ function clean(msg) {
 }
 
 // =======================
-// VIBER SEND SAFE
+// VIBER SEND
 async function send(userId, text, keyboard = null) {
   try {
     await axios.post(
@@ -64,9 +125,7 @@ async function send(userId, text, keyboard = null) {
         headers: { "X-Viber-Auth-Token": process.env.VIBER_TOKEN }
       }
     );
-  } catch (e) {
-    console.log("VIBER ERROR:", e.message);
-  }
+  } catch {}
 }
 
 // =======================
@@ -115,8 +174,6 @@ app.post("/webhook", async (req, res) => {
 
     // PRICE
     if (msg === "price") {
-      st.mode = "price";
-
       const cats = db.categories.map((c, i) => ({
         label: `📁 ${c.name}`,
         value: `price_cat_${i}`
@@ -128,8 +185,6 @@ app.post("/webhook", async (req, res) => {
 
     // CALC
     if (msg === "calc") {
-      st.mode = "calc";
-
       const cats = db.categories.map((c, i) => ({
         label: `📁 ${c.name}`,
         value: `calc_cat_${i}`
@@ -141,7 +196,6 @@ app.post("/webhook", async (req, res) => {
 
     // INVOICE
     if (msg === "invoice") {
-      st.mode = "invoice";
       st.cart = [];
 
       const cats = db.categories.map((c, i) => ({
@@ -153,16 +207,14 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // CATEGORY
+    // CATEGORY FIX (IMPORTANT)
     if (msg.includes("_cat_")) {
       const parts = msg.split("_");
       const mode = parts[0];
       const i = parts[2];
 
-      const cat = db.categories?.[i];
+      const cat = db.categories[i];
       if (!cat) return res.sendStatus(200);
-
-      st.catIndex = i;
 
       const items = cat.items.map((it, idx) => ({
         label: `📄 ${it.item}`,
@@ -173,7 +225,7 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ITEM
+    // ITEM FIX
     if (msg.includes("_item_")) {
       const parts = msg.split("_");
       const mode = parts[0];
@@ -210,10 +262,7 @@ app.post("/webhook", async (req, res) => {
       }
 
       if (mode === "inv") {
-        if (!st.cart) st.cart = [];
-
         st.cart.push(item);
-
         await send(uid, "✔ Added");
         return res.sendStatus(200);
       }
@@ -221,8 +270,6 @@ app.post("/webhook", async (req, res) => {
 
     // SIDE
     if (msg === "side_1" || msg === "side_2") {
-      if (!st.item) return res.sendStatus(200);
-
       st.side = msg === "side_2" ? 2 : 1;
       st.step = "qty";
 
@@ -261,7 +308,7 @@ app.post("/webhook", async (req, res) => {
     res.sendStatus(200);
 
   } catch (e) {
-    console.log("CRASH FIXED:", e.message);
+    console.log("ERROR:", e.message);
     res.sendStatus(200);
   }
 });
@@ -269,5 +316,5 @@ app.post("/webhook", async (req, res) => {
 // =======================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log("🚀 DEPLOY SAFE SYSTEM RUNNING");
+  console.log("🚀 FULL SYSTEM FIXED + ADMIN + VIBER READY");
 });
