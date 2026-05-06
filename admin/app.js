@@ -1,13 +1,12 @@
 let db = {};
 
 async function load() {
-  db = await (await fetch('/api/prices')).json();
+  db = await (await fetch("/api/prices")).json();
   render();
 }
 
-// =======================
 async function save() {
-  await fetch('/api/save-v2', {
+  await fetch("/api/save-v2", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -22,20 +21,11 @@ async function save() {
     })
   });
 
-  item.value = "";
-  size.value = "";
-  gsm.value = "";
-  s1.value = "";
-  s2.value = "";
-  lam.value = "";
-  remark.value = "";
-
   load();
 }
 
-// =======================
 async function updatePrice(id, price) {
-  await fetch('/api/update-entry', {
+  await fetch("/api/update-entry", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, price })
@@ -44,9 +34,8 @@ async function updatePrice(id, price) {
   load();
 }
 
-// =======================
 async function deleteItem(id) {
-  await fetch('/api/delete-entry', {
+  await fetch("/api/delete-entry", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -55,12 +44,10 @@ async function deleteItem(id) {
   load();
 }
 
-// =======================
 function render() {
   list.innerHTML = "";
 
   db.categories.forEach(c => {
-
     let html = `
       <div class="box">
         <h3>📁 ${c.name}</h3>
@@ -72,8 +59,6 @@ function render() {
             <th>GSM</th>
             <th>1S</th>
             <th>2S</th>
-            <th>Lam</th>
-            <th>Remark</th>
             <th>Action</th>
           </tr>
     `;
@@ -89,9 +74,7 @@ function render() {
             <input value="${i.s1}" onchange="updatePrice('${i.id}', this.value)">
           </td>
 
-          <td>${i.s2 || "-"}</td>
-          <td>${i.lamination || "-"}</td>
-          <td>${i.remark || "-"}</td>
+          <td>${i.s2}</td>
 
           <td>
             <button onclick="deleteItem('${i.id}')">❌</button>
@@ -101,7 +84,6 @@ function render() {
     });
 
     html += `</table></div>`;
-
     list.innerHTML += html;
   });
 }
