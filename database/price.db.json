@@ -1,3 +1,137 @@
 {
-  "categories": []
+  "categories": [
+    {
+      "name": "Digital Press",
+      "items": [
+        {
+          "item": "Art Paper",
+          "size": "A4",
+          "gsm": 128,
+          "s1": 1400,
+          "s2": 2100,
+          "lamination": "-"
+        },
+        {
+          "item": "Art Paper",
+          "size": "A4",
+          "gsm": 148,
+          "s1": 1600,
+          "s2": 2300,
+          "lamination": "-"
+        },
+        {
+          "item": "Art Card",
+          "size": "A4",
+          "gsm": 210,
+          "s1": 1900,
+          "s2": 2500,
+          "lamination": 1000
+        },
+        {
+          "item": "Art Card",
+          "size": "A4",
+          "gsm": 250,
+          "s1": 2200,
+          "s2": 2800,
+          "lamination": 1000
+        },
+        {
+          "item": "Art Card",
+          "size": "A4",
+          "gsm": 300,
+          "s1": 2700,
+          "s2": 3800,
+          "lamination": 1000
+        },
+        {
+          "item": "Art Card",
+          "size": "A4",
+          "gsm": 350,
+          "s1": 2400,
+          "s2": 3000,
+          "lamination": 1000
+        },
+        {
+          "item": "White Card",
+          "size": "A4",
+          "gsm": 250,
+          "s1": 2900,
+          "s2": 4000,
+          "lamination": 1000
+        },
+        {
+          "item": "AQ, Hx, …",
+          "size": "A4",
+          "gsm": 250,
+          "s1": 3200,
+          "s2": 4300,
+          "lamination": 1000
+        },
+        {
+          "item": "Art Paper",
+          "size": "13x19",
+          "gsm": 128,
+          "s1": 3800,
+          "s2": 5000,
+          "lamination": "-"
+        },
+        {
+          "item": "Art Paper",
+          "size": "13x19",
+          "gsm": 148,
+          "s1": 4300,
+          "s2": 5500,
+          "lamination": "-"
+        },
+        {
+          "item": "Art Card",
+          "size": "13x19",
+          "gsm": 210,
+          "s1": 4800,
+          "s2": 6000,
+          "lamination": 1000
+        },
+        {
+          "item": "Art Card",
+          "size": "13x19",
+          "gsm": 250,
+          "s1": 5300,
+          "s2": 6500,
+          "lamination": 1000
+        },
+        {
+          "item": "Art Card",
+          "size": "13x19",
+          "gsm": 300,
+          "s1": 5800,
+          "s2": 7500,
+          "lamination": 1000
+        },
+        {
+          "item": "Art Card",
+          "size": "13x19",
+          "gsm": 350,
+          "s1": 5800,
+          "s2": 7500,
+          "lamination": 1000
+        },
+        {
+          "item": "White Card",
+          "size": "13x19",
+          "gsm": 250,
+          "s1": 6800,
+          "s2": 9000,
+          "lamination": 1000
+        },
+        {
+          "item": "AQ, Hx, …",
+          "size": "13x19",
+          "gsm": 250,
+          "s1": 6300,
+          "s2": 8500,
+          "lamination": 1000
+        }
+      ]
+    }
+  ]
 }
