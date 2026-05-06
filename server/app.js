@@ -17,7 +17,7 @@ function loadDB() {
 }
 
 // =======================
-// CLEAN
+// CLEAN INPUT
 function clean(msg) {
   return (msg || "")
     .replace(/[📁📄💰🧮📦]/g, "")
@@ -26,7 +26,32 @@ function clean(msg) {
 }
 
 // =======================
-// COMMAND MAP (IMPORTANT FIX)
+// BURMESE NUMBER FIX
+function normalizeNumber(msg) {
+  const map = {
+    "၀":"0","၁":"1","၂":"2","၃":"3","၄":"4",
+    "၅":"5","၆":"6","၇":"7","၈":"8","၉":"9"
+  };
+
+  return (msg || "")
+    .split("")
+    .map(c => map[c] ?? c)
+    .join("");
+}
+
+function isNumber(msg) {
+  return /^\d+$/.test(normalizeNumber(msg));
+}
+
+// =======================
+// SAFE DISPLAY
+function safe(v) {
+  return (v === undefined || v === null || v === "" || v === "-")
+    ? "-"
+    : v;
+}
+
+// =======================
 const commandMap = {
   "ဈေးတွက်မယ်": "service_calc",
   "ဈေးမေးမယ်": "service_price",
@@ -86,11 +111,6 @@ const SERVICE_MENU = [
 const ignoreMsgs = [".", "home", "back", "menu", "start"];
 
 // =======================
-function isNumber(msg) {
-  return /^\d+$/.test(msg);
-}
-
-// =======================
 // SMART SEARCH
 function findItemSmart(db, msg) {
   let best = null;
@@ -100,7 +120,6 @@ function findItemSmart(db, msg) {
 
   db.categories.forEach(c => {
     c.items.forEach(i => {
-
       let s = 0;
 
       const name = (i.item || "").toLowerCase();
@@ -129,17 +148,15 @@ app.post("/webhook", async (req, res) => {
   if (body.event !== "message") return res.sendStatus(200);
 
   const userId = body.sender.id;
-  const rawMsg = body.message.text || "";
+  let rawMsg = body.message.text || "";
 
   let msg = clean(rawMsg);
-
-  // 🔥 COMMAND MAP FIX APPLY
   msg = commandMap[msg] || msg;
+  msg = normalizeNumber(msg);
 
   const db = loadDB();
   const state = userState[userId];
 
-  // =======================
   // RESET
   if (ignoreMsgs.includes(msg)) {
     delete userState[userId];
@@ -147,13 +164,13 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // =======================
+  // MENU
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
     await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
     return res.sendStatus(200);
   }
 
-  // =======================
+  // SERVICE PRICE
   if (msg === "service_price") {
     const cats = db.categories.map((c, i) => ({
       label: `📁 ${c.name}`,
@@ -164,7 +181,7 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // =======================
+  // SERVICE CALC
   if (msg === "service_calc") {
     userState[userId] = { mode: "calc" };
 
@@ -177,7 +194,7 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // =======================
+  // CATEGORY
   if (msg.startsWith("cat_")) {
     const index = Number(msg.replace("cat_", ""));
     const category = db.categories[index];
@@ -191,7 +208,7 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // =======================
+  // ITEM
   if (msg.startsWith("item_")) {
     const parts = msg.split("_");
     const item = db.categories[parts[1]]?.items[parts[2]];
@@ -215,8 +232,8 @@ app.post("/webhook", async (req, res) => {
     await send(userId,
 `📄 ${item.item}
 
-📏 Size: ${item.size}
-📦 GSM: ${item.gsm}
+📏 ${safe(item.size)}
+📦 ${safe(item.gsm)}
 
 💰 1 side: ${item.s1}
 💰 2 side: ${item.s2}`);
@@ -224,8 +241,7 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // =======================
-  // QTY STEP
+  // QTY
   if (state?.mode === "calc_qty") {
 
     if (!isNumber(msg)) {
@@ -233,16 +249,18 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    const qty = Number(normalizeNumber(msg));
+
     userState[userId] = {
       mode: "calc_side",
       item: state.item,
-      qty: Number(msg)
+      qty
     };
 
     await send(userId,
 `🧾 Select Side
 
-📦 Qty: ${msg}`,
+📦 Qty: ${qty}`,
 kb([
       { label: "1️⃣ 1 Side", value: "side_1" },
       { label: "2️⃣ 2 Side", value: "side_2" }
@@ -251,8 +269,7 @@ kb([
     return res.sendStatus(200);
   }
 
-  // =======================
-  // SIDE STEP
+  // SIDE
   if (msg === "side_1" || msg === "side_2") {
 
     if (!state || state.mode !== "calc_side") return res.sendStatus(200);
@@ -269,8 +286,8 @@ kb([
 `🧾 RESULT
 
 📄 ${item.item}
-📏 ${item.size}
-📦 ${item.gsm}
+📏 ${safe(item.size)}
+📦 ${safe(item.gsm)}
 🧾 ${side} Side
 📦 Qty: ${qty}
 
@@ -280,8 +297,7 @@ kb([
     return res.sendStatus(200);
   }
 
-  // =======================
-  // AI ONLY WHEN NO STATE (IMPORTANT FIX)
+  // SMART AI FALLBACK
   if (!state) {
     const item = findItemSmart(db, msg);
 
@@ -289,8 +305,8 @@ kb([
       await send(userId,
 `📄 ${item.item}
 
-📏 ${item.size}
-📦 ${item.gsm}
+📏 ${safe(item.size)}
+📦 ${safe(item.gsm)}
 
 👉 Qty + Side လိုပါတယ်`);
 
@@ -298,7 +314,6 @@ kb([
     }
   }
 
-  // =======================
   await send(userId, "📦 Select Service", kb(SERVICE_MENU));
   res.sendStatus(200);
 });
@@ -306,5 +321,5 @@ kb([
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V9 FINAL STABLE PRODUCTION VERSION RUNNING");
+  console.log("🚀 FINAL PRODUCTION VERSION RUNNING");
 });
