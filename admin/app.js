@@ -1,8 +1,6 @@
 let db = {};
 
 // =======================
-// LOAD DB
-// =======================
 async function load() {
   const res = await fetch('/api/prices');
   db = await res.json();
@@ -11,8 +9,6 @@ async function load() {
   renderList();
 }
 
-// =======================
-// CATEGORY
 // =======================
 function renderCategory() {
   category.innerHTML = "";
@@ -26,45 +22,49 @@ function renderCategory() {
 }
 
 // =======================
-// SAVE (FIXED STRUCTURE)
+// SAVE (FIXED + ADD CATEGORY SUPPORT)
 // =======================
 async function save() {
-  let cat = newCategory.value || category.value;
+  let cat = newCategory.value.trim() || category.value;
 
-  const data = {
-    category: cat,
-    item: item.value,
-    size: size.value,
-    paper: paper.value,
-    side: side.value,
-    price: price.value
-  };
+  if (!cat || !item.value || !price.value) {
+    return alert("Fill required fields");
+  }
 
   await fetch('/api/save-v2', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      category: cat,
+      item: item.value,
+      size: size.value,
+      paper: paper.value,
+      side: side.value,
+      price: price.value
+    })
   });
 
+  newCategory.value = "";
   item.value = "";
   size.value = "";
   paper.value = "";
   side.value = "";
   price.value = "";
-  newCategory.value = "";
 
   load();
 }
 
 // =======================
-// DELETE CATEGORY
+// DELETE CATEGORY (FIXED)
 // =======================
 async function deleteCategory() {
+  if (!category.value) return;
+
   if (!confirm("Delete category?")) return;
 
   await fetch('/api/delete-category', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ category: category.value })
   });
 
@@ -82,7 +82,7 @@ async function deleteSelected() {
 
   await fetch('/api/delete-items', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ ids })
   });
 
@@ -90,7 +90,7 @@ async function deleteSelected() {
 }
 
 // =======================
-// RENDER LIST (FIXED DISPLAY)
+// RENDER LIST (CLEAN UI)
 // =======================
 function renderList() {
   list.innerHTML = "";
@@ -111,14 +111,12 @@ function renderList() {
 
       let html = `<b>${item.name}</b><br>`;
 
-      if (item.entries) {
-        item.entries.forEach(e => {
-          html += `
-            <input type="checkbox" value="${e.id}">
-            ${e.size || "-"} | ${e.paper || "-"} | ${e.side || "-"} → ${e.price} Ks<br>
-          `;
-        });
-      }
+      item.entries?.forEach(e => {
+        html += `
+          <input type="checkbox" value="${e.id}">
+          ${e.size || "-"} | ${e.gsm || "-"}gsm | ${e.side || "-"} → ${e.price} Ks<br>
+        `;
+      });
 
       div.innerHTML = html;
       box.appendChild(div);
