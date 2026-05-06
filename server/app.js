@@ -9,19 +9,13 @@ app.use(express.json());
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================
-// ADMIN PANEL (KEEP)
-// =======================
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
-// =======================
-// LOAD DB
 // =======================
 function loadDB() {
   return JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));
 }
 
-// =======================
-// CLEAN INPUT
 // =======================
 function clean(msg) {
   return (msg || "")
@@ -30,8 +24,6 @@ function clean(msg) {
     .trim();
 }
 
-// =======================
-// VIBER SEND
 // =======================
 async function send(userId, text, keyboard = null) {
   const body = {
@@ -58,8 +50,7 @@ async function send(userId, text, keyboard = null) {
 }
 
 // =======================
-// KEYBOARD (GRID UI)
-// =======================
+// GRID UI
 function kb(items) {
   return {
     Type: "keyboard",
@@ -67,14 +58,12 @@ function kb(items) {
       ActionType: "reply",
       ActionBody: i.value,
       Text: i.label,
-      Columns: 3,   // 🔥 grid 3x?
+      Columns: 3,
       Rows: 1
     }))
   };
 }
 
-// =======================
-// SERVICE MENU
 // =======================
 const SERVICE_MENU = [
   { label: "💰 ဈေးမေးမယ်", value: "service_price" },
@@ -82,7 +71,43 @@ const SERVICE_MENU = [
 ];
 
 // =======================
-// WEBHOOK
+// 🔥 AI FIND ITEM
+function findItemSmart(db, msg) {
+  let best = null;
+  let score = 0;
+
+  db.categories.forEach(c => {
+    c.items.forEach(i => {
+      let s = 0;
+
+      if (msg.includes(i.item.toLowerCase())) s += 3;
+      if (msg.includes((i.size || "").toLowerCase())) s += 2;
+      if (msg.includes(String(i.gsm))) s += 2;
+
+      if (s > score) {
+        score = s;
+        best = i;
+      }
+    });
+  });
+
+  return best;
+}
+
+// =======================
+// PARSE
+function parseInput(msg) {
+  const size = msg.match(/(\d+)\s*[x*]\s*(\d+)/);
+  const qtyMatch = msg.match(/(\d+)\s*(pcs|pc)?/);
+  const side = msg.includes("2") && msg.includes("side") ? 2 : 1;
+
+  return {
+    size,
+    qty: qtyMatch ? Number(qtyMatch[1]) : 1,
+    side
+  };
+}
+
 // =======================
 app.post("/webhook", async (req, res) => {
   const body = req.body;
@@ -95,39 +120,26 @@ app.post("/webhook", async (req, res) => {
   const db = loadDB();
 
   // =======================
-  // START MENU (FIX DOUBLE HI BUG)
-  // =======================
+  // START
   if (["hi", "hello", "start", "menu", "မင်္ဂလာပါ"].includes(msg)) {
     await send(userId, "📦 7Star System\nSelect Service:", kb(SERVICE_MENU));
     return res.sendStatus(200);
   }
 
   // =======================
-  // SERVICE → CATEGORY
-  // =======================
+  // BUTTON FLOW
   if (msg === "service_price") {
-
     const cats = db.categories.map((c, i) => ({
       label: `📁 ${c.name}`,
       value: `cat_${i}`
     }));
-
     await send(userId, "📁 Select Category", kb(cats));
     return res.sendStatus(200);
   }
 
-  // =======================
-  // CATEGORY CLICK (NO LOOP BUG)
-  // =======================
   if (msg.startsWith("cat_")) {
-
     const index = Number(msg.replace("cat_", ""));
     const category = db.categories[index];
-
-    if (!category) {
-      await send(userId, "❌ Category error");
-      return res.sendStatus(200);
-    }
 
     const items = category.items.map((i, idx) => ({
       label: `📄 ${i.item} ${i.size} ${i.gsm}`,
@@ -138,22 +150,9 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // =======================
-  // ITEM CLICK (FIXED 100%)
-  // =======================
   if (msg.startsWith("item_")) {
-
     const parts = msg.split("_");
-    const catIndex = Number(parts[1]);
-    const itemIndex = Number(parts[2]);
-
-    const category = db.categories[catIndex];
-    const item = category?.items[itemIndex];
-
-    if (!item) {
-      await send(userId, "❌ Item error");
-      return res.sendStatus(200);
-    }
+    const item = db.categories[parts[1]]?.items[parts[2]];
 
     await send(
       userId,
@@ -171,25 +170,57 @@ app.post("/webhook", async (req, res) => {
 
   // =======================
   // CALCULATOR
-  // =======================
   if (msg === "service_calc") {
-    await send(userId, "🧮 Send math (eg: 2+2)");
-    return res.sendStatus(200);
-  }
-
-  if (/^[0-9+\-*/().\s]+$/.test(msg)) {
-    try {
-      const r = eval(msg);
-      await send(userId, `🧮 ${r}`);
-    } catch {}
+    await send(userId, "🧮 Send: art paper a4 128 2 side 100");
     return res.sendStatus(200);
   }
 
   // =======================
-  // DEFAULT (NO LOOP)
+  // 🔥 SMART AI CHAT
+  const item = findItemSmart(db, msg);
+
+  if (item) {
+    const parsed = parseInput(msg);
+
+    const price = parsed.side === 2 ? item.s2 : item.s1;
+    const total = price * parsed.qty;
+
+    // FULL INFO
+    if (msg.includes(item.item.toLowerCase()) &&
+        msg.includes(item.size.toLowerCase()) &&
+        msg.includes(String(item.gsm))) {
+
+      await send(
+        userId,
+`🧾 RESULT
+
+📄 ${item.item}
+📏 ${item.size}
+📦 ${item.gsm}
+🧾 ${parsed.side} side
+📦 Qty: ${parsed.qty}
+
+💰 Total: ${total} Ks`
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // PARTIAL → ASK
+    await send(
+      userId,
+`📄 ${item.item}
+
+📏 Size?
+📦 GSM?
+🧾 1 side / 2 side?`
+    );
+
+    return res.sendStatus(200);
+  }
+
   // =======================
   await send(userId, "📦 Select Service", kb(SERVICE_MENU));
-
   res.sendStatus(200);
 });
 
@@ -197,5 +228,5 @@ app.post("/webhook", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🚀 V14 STABLE RUNNING");
+  console.log("🚀 V15 SMART AI RUNNING");
 });
