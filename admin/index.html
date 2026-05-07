@@ -1,34 +1,144 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>7Star POS v9</title>
+  <meta charset="UTF-8">
+  <title>7Star Admin</title>
 
-<style>
-body { font-family: Arial; background:#eef1f6; padding:20px; }
-.box { background:white; padding:15px; margin-bottom:15px; border-radius:10px; }
-input { padding:6px; margin:4px; }
-button { padding:6px 10px; margin:3px; cursor:pointer; }
-table { width:100%; border-collapse:collapse; }
-th,td { border:1px solid #ddd; padding:6px; text-align:center; }
-th { background:#f5f5f5; }
-</style>
+  <style>
+
+    *{
+      box-sizing:border-box;
+    }
+
+    body{
+      margin:0;
+      padding:20px;
+      background:#0f172a;
+      font-family:Arial;
+      color:white;
+    }
+
+    h1{
+      margin-bottom:20px;
+    }
+
+    .card{
+      background:#1e293b;
+      padding:20px;
+      border-radius:16px;
+      margin-bottom:20px;
+      box-shadow:0 0 10px rgba(0,0,0,.3);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+      gap:10px;
+    }
+
+    input,select{
+      width:100%;
+      padding:12px;
+      border:none;
+      border-radius:10px;
+      background:#334155;
+      color:white;
+    }
+
+    button{
+      border:none;
+      padding:12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:bold;
+    }
+
+    .saveBtn{
+      background:#22c55e;
+      color:white;
+      width:100%;
+      margin-top:15px;
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:15px;
+    }
+
+    th,td{
+      border:1px solid #334155;
+      padding:10px;
+      text-align:center;
+      font-size:14px;
+    }
+
+    th{
+      background:#111827;
+    }
+
+    tr:nth-child(even){
+      background:#1e293b;
+    }
+
+    .deleteBtn{
+      background:#ef4444;
+      color:white;
+    }
+
+    .title{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+
+    .badge{
+      background:#2563eb;
+      padding:5px 10px;
+      border-radius:999px;
+      font-size:12px;
+    }
+
+  </style>
 </head>
 
 <body>
 
-<h2>📦 7Star POS v9</h2>
+<h1>📦 7Star POS Admin</h1>
 
-<div class="box">
-  <input id="category" placeholder="category">
-  <input id="item" placeholder="item">
-  <input id="size" placeholder="size">
-  <input id="gsm" placeholder="gsm">
-  <input id="s1" placeholder="1 side">
-  <input id="s2" placeholder="2 side">
-  <input id="lam" placeholder="lamination">
-  <input id="remark" placeholder="remark">
-  <br>
-  <button onclick="save()">💾 Save</button>
+<div class="card">
+
+  <div class="title">
+    <h2>Add Price</h2>
+    <div class="badge">v10</div>
+  </div>
+
+  <div class="grid">
+
+    <input id="category" placeholder="Category">
+    <input id="item" placeholder="Item">
+    <input id="size" placeholder="Size">
+    <input id="gsm" placeholder="GSM">
+
+    <input id="s1" placeholder="1 Side Price">
+    <input id="s2" placeholder="2 Side Price">
+
+    <input id="lam" placeholder="Lamination">
+    <input id="remark" placeholder="Remark">
+
+  </div>
+
+  <div style="margin-top:15px;">
+    <label>
+      <input type="checkbox" id="noSide">
+      No Side Mode (Fixed Price)
+    </label>
+  </div>
+
+  <button class="saveBtn" onclick="save()">
+    💾 Save
+  </button>
+
 </div>
 
 <div id="list"></div>

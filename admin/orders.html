@@ -1,58 +1,122 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <title>Orders</title>
+
+  <style>
+
+    body{
+      background:#0f172a;
+      color:white;
+      font-family:Arial;
+      padding:20px;
+    }
+
+    .card{
+      background:#1e293b;
+      padding:15px;
+      border-radius:14px;
+      margin-bottom:15px;
+    }
+
+    select{
+      width:100%;
+      padding:10px;
+      margin-top:10px;
+      border:none;
+      border-radius:10px;
+      background:#334155;
+      color:white;
+    }
+
+  </style>
 </head>
+
 <body>
 
-<h2>📦 Orders</h2>
+<h1>📦 Orders</h1>
 
 <div id="orders"></div>
 
 <script>
+
 async function loadOrders() {
-  const res = await fetch('/api/orders');
+
+  const res = await fetch("/api/orders");
+
   const data = await res.json();
 
-  const box = document.getElementById("orders");
-  box.innerHTML = "";
+  orders.innerHTML = "";
 
-  data.orders.forEach(o => {
-    const div = document.createElement("div");
-    div.style.border = "1px solid #ccc";
-    div.style.margin = "10px";
-    div.style.padding = "10px";
+  (data.orders || []).forEach(o => {
 
-    div.innerHTML = `
-      <b>${o.id}</b><br>
-      ${o.service}<br>
-      Qty: ${o.qty}<br>
-      Price: ${o.price} Ks<br>
-      Status: ${o.status}<br>
+    orders.innerHTML += `
+      <div class="card">
 
-      <select onchange="updateStatus('${o.id}', this.value)">
-        <option ${o.status==="NEW"?"selected":""}>NEW</option>
-        <option ${o.status==="DESIGN"?"selected":""}>DESIGN</option>
-        <option ${o.status==="PRINT"?"selected":""}>PRINT</option>
-        <option ${o.status==="DONE"?"selected":""}>DONE</option>
-      </select>
+        <h3>${o.id}</h3>
+
+        <p>
+          ${o.service || "-"}
+        </p>
+
+        <p>
+          Qty: ${o.qty || 0}
+        </p>
+
+        <p>
+          Price: ${(o.price || 0).toLocaleString()} Ks
+        </p>
+
+        <p>
+          Status: ${o.status || "NEW"}
+        </p>
+
+        <select onchange="updateStatus('${o.id}', this.value)">
+
+          <option value="NEW">
+            NEW
+          </option>
+
+          <option value="DESIGN">
+            DESIGN
+          </option>
+
+          <option value="PRINT">
+            PRINT
+          </option>
+
+          <option value="DONE">
+            DONE
+          </option>
+
+        </select>
+
+      </div>
     `;
-
-    box.appendChild(div);
   });
 }
 
+// =====================================
 async function updateStatus(id, status) {
-  await fetch('/api/update-status', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id, status})
+
+  await fetch("/api/update-status", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      id,
+      status
+    })
   });
 
   loadOrders();
 }
 
+// =====================================
 loadOrders();
+
 </script>
 
 </body>

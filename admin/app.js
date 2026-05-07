@@ -1,14 +1,23 @@
 let db = {};
 
+// ====================================
 async function load() {
-  db = await (await fetch("/api/prices")).json();
+
+  const res = await fetch("/api/prices");
+
+  db = await res.json();
+
   render();
 }
 
+// ====================================
 async function save() {
+
   await fetch("/api/save-v2", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({
       category: category.value,
       item: item.value,
@@ -17,15 +26,19 @@ async function save() {
       s1: s1.value,
       s2: s2.value,
       lamination: lam.value,
-      remark: remark.value
+      remark: remark.value,
+      noSide: noSide.checked
     })
   });
 
   clearForm();
+
   load();
 }
 
+// ====================================
 function clearForm() {
+
   category.value = "";
   item.value = "";
   size.value = "";
@@ -34,82 +47,126 @@ function clearForm() {
   s2.value = "";
   lam.value = "";
   remark.value = "";
+
+  noSide.checked = false;
 }
 
+// ====================================
 async function updatePrice(id, field, value) {
+
   await fetch("/api/update-entry", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, field, value })
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      id,
+      field,
+      value
+    })
   });
-
-  load();
 }
 
+// ====================================
 async function deleteItem(id) {
+
+  if (!confirm("Delete this item?")) {
+    return;
+  }
+
   await fetch("/api/delete-entry", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id })
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      id
+    })
   });
 
   load();
 }
 
+// ====================================
 function render() {
+
   list.innerHTML = "";
 
-  (db.categories || []).forEach((c, cIdx) => {
+  (db.categories || []).forEach(c => {
+
     let html = `
-      <div class="box">
-        <h3>📁 ${c.name}</h3>
+      <div class="card">
+
+        <div class="title">
+          <h2>📁 ${c.name}</h2>
+          <div class="badge">
+            ${(c.items || []).length} items
+          </div>
+        </div>
 
         <table>
+
           <tr>
             <th>Item</th>
             <th>Size</th>
             <th>GSM</th>
             <th>1 Side</th>
             <th>2 Side</th>
-            <th>Lamination</th>
-            <th>Remark</th>
-            <th>Action</th>
+            <th>Mode</th>
+            <th>Delete</th>
           </tr>
     `;
 
-    (c.items || []).forEach((i, idx) => {
-      const id = i.id || `${cIdx}_${idx}`;
+    (c.items || []).forEach(i => {
 
       html += `
         <tr>
+
           <td>${i.item || "-"}</td>
+
           <td>${i.size || "-"}</td>
-          <td>${i.gsm ?? "-"}</td>
+
+          <td>${i.gsm || "-"}</td>
 
           <td>
-            <input value="${i.s1 ?? 0}"
-              onchange="updatePrice('${id}','s1',this.value)">
+            <input
+              value="${i.s1 || 0}"
+              onchange="updatePrice('${i.id}','s1',this.value)"
+            >
           </td>
 
           <td>
-            <input value="${i.s2 ?? 0}"
-              onchange="updatePrice('${id}','s2',this.value)">
+            <input
+              value="${i.s2 || 0}"
+              onchange="updatePrice('${i.id}','s2',this.value)"
+            >
           </td>
-
-          <td>${i.lamination ?? "-"}</td>
-
-          <td>${i.remark ?? "-"}</td>
 
           <td>
-            <button onclick="deleteItem('${id}')">❌</button>
+            ${i.noSide ? "FIXED" : "SIDE"}
           </td>
+
+          <td>
+            <button
+              class="deleteBtn"
+              onclick="deleteItem('${i.id}')"
+            >
+              ❌
+            </button>
+          </td>
+
         </tr>
       `;
     });
 
-    html += `</table></div>`;
+    html += `
+        </table>
+      </div>
+    `;
+
     list.innerHTML += html;
   });
 }
 
+// ====================================
 load();
