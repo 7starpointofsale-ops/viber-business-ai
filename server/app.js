@@ -55,6 +55,14 @@ function loadDB() {
 }
 
 // =======================================
+// SAVE DB (IMPORTANT)
+// =======================================
+function saveDB(data){
+  dbCache = data;
+  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+}
+
+// =======================================
 // STATE
 // =======================================
 const userState = {};
@@ -80,13 +88,10 @@ const commandMap = {
 };
 
 // =======================================
-// CLEAN INPUT
+// CLEAN
 // =======================================
 function normalizeText(text="") {
-  return text
-    .replace(/\u200B/g,"")
-    .trim()
-    .toLowerCase();
+  return text.replace(/\u200B/g,"").trim().toLowerCase();
 }
 
 function normalizeNumber(msg="") {
@@ -127,7 +132,6 @@ async function send(userId, text, keyboard=null){
       "https://chatapi.viber.com/pa/send_message",
       body,
       {
-        timeout: 10000,
         headers: {
           "X-Viber-Auth-Token": process.env.VIBER_TOKEN
         }
@@ -160,8 +164,6 @@ function kb(items){
 // SMART SEARCH
 // =======================================
 function findItemSmart(db,msg){
-  if(!db?.categories) return null;
-
   let best=null,bestScore=0;
   const tokens=msg.split(" ");
 
@@ -190,18 +192,66 @@ function findItemSmart(db,msg){
 }
 
 // =======================================
-// 🔥 REMOVE BG FEATURE (FULL WORKING)
+// 🔥 ADMIN SAVE API (FIXED)
 // =======================================
-app.post("/remove-bg", upload.single("image"), async (req,res)=>{
+app.post("/api/prices/add",(req,res)=>{
   try {
-    if(!req.file){
-      return res.status(400).json({ok:false,error:"no file"});
+    const db = loadDB();
+
+    const {
+      categoryIndex,
+      item,
+      size,
+      gsm,
+      s1,
+      s2,
+      noSide,
+      lamination,
+      remark
+    } = req.body;
+
+    if(!db.categories[categoryIndex]){
+      return res.json({ok:false,message:"Category not found"});
     }
 
-    const form = new FormData();
-    form.append("image_file", fs.createReadStream(req.file.path));
+    db.categories[categoryIndex].items.push({
+      item,
+      size,
+      gsm,
+      s1:Number(s1||0),
+      s2:Number(s2||0),
+      noSide:noSide||false,
+      lamination:lamination||"",
+      remark:remark||""
+    });
 
-    const response = await axios.post(
+    saveDB(db);
+
+    res.json({ok:true});
+
+  } catch(e){
+    console.log("SAVE ERROR:", e.message);
+    res.json({ok:false});
+  }
+});
+
+// =======================================
+// REMOVE BG + IMAGE HANDLER
+// =======================================
+async function handleImage(body){
+  try {
+    const userId = body.sender.id;
+    const imageUrl = body.message.media;
+
+    const img = await axios.get(imageUrl,{responseType:"arraybuffer"});
+
+    const filePath = path.join(__dirname,"../uploads/viber.jpg");
+    fs.writeFileSync(filePath,img.data);
+
+    const form = new FormData();
+    form.append("image_file",fs.createReadStream(filePath));
+
+    const bg = await axios.post(
       "https://api.remove.bg/v1.0/removebg",
       form,
       {
@@ -213,23 +263,26 @@ app.post("/remove-bg", upload.single("image"), async (req,res)=>{
       }
     );
 
-    fs.unlinkSync(req.file.path);
+    fs.unlinkSync(filePath);
 
-    res.setHeader("Content-Type","image/png");
-    res.send(response.data);
+    await axios.post(
+      "https://chatapi.viber.com/pa/send_message",
+      {
+        receiver:userId,
+        type:"picture",
+        media:"data:image/png;base64," + Buffer.from(bg.data).toString("base64")
+      },
+      {
+        headers:{
+          "X-Viber-Auth-Token":process.env.VIBER_TOKEN
+        }
+      }
+    );
 
   } catch(e){
-    console.log("REMOVE BG ERROR:", e.message);
-    res.status(500).json({ok:false});
+    console.log("IMAGE ERROR:",e.message);
   }
-});
-
-// =======================================
-// PRICE API
-// =======================================
-app.get("/api/prices",(req,res)=>{
-  res.json(loadDB());
-});
+}
 
 // =======================================
 // WEBHOOK
@@ -240,6 +293,11 @@ app.post("/webhook", async (req,res)=>{
   try {
     const body=req.body;
     if(body.event!=="message") return;
+
+    if(body.message.type==="picture"){
+      await handleImage(body);
+      return;
+    }
 
     const userId=body.sender.id;
 
@@ -256,7 +314,6 @@ app.post("/webhook", async (req,res)=>{
     const db = loadDB();
     const state = userState[userId];
 
-    // HOME
     if(HOME_TRIGGERS.has(msg)){
       delete userState[userId];
       await send(userId,"📦 7Star System",kb(SERVICE_MENU));
@@ -264,7 +321,7 @@ app.post("/webhook", async (req,res)=>{
     }
 
     if(msg==="service_price"){
-      const cats=(db.categories||[]).map((c,i)=>({
+      const cats=db.categories.map((c,i)=>({
         label:`📁 ${c.name}`,
         value:`cat_${i}`
       }));
@@ -274,12 +331,10 @@ app.post("/webhook", async (req,res)=>{
 
     if(msg==="service_calc"){
       userState[userId]={mode:"calc"};
-
-      const cats=(db.categories||[]).map((c,i)=>({
+      const cats=db.categories.map((c,i)=>({
         label:`📁 ${c.name}`,
         value:`cat_${i}`
       }));
-
       await send(userId,"🧮 Category",kb(cats));
       return;
     }
@@ -289,7 +344,7 @@ app.post("/webhook", async (req,res)=>{
       const cat=db.categories[idx];
       if(!cat) return;
 
-      const items=(cat.items||[]).map((it,i)=>({
+      const items=cat.items.map((it,i)=>({
         label:`📄 ${it.item}`,
         value:`item_${idx}_${i}`
       }));
@@ -313,42 +368,6 @@ app.post("/webhook", async (req,res)=>{
 
       await send(userId,text);
       return;
-    }
-
-    if(state?.mode==="qty"){
-      if(!isNumber(msg)){
-        await send(userId,"❌ Number only");
-        return;
-      }
-
-      const qty=Number(normalizeNumber(msg));
-      const total=Number(state.item.s1||0)*qty;
-
-      await send(userId,
-`📦 RESULT
-
-📄 ${state.item.item}
-
-📦 Qty: ${qty}
-
-💰 Total: ${formatPrice(total)} Ks`
-      );
-
-      delete userState[userId];
-      return;
-    }
-
-    if(!state){
-      const item=findItemSmart(db,msg);
-      if(item){
-        await send(userId,
-`📄 ${item.item}
-
-📏 ${safe(item.size)}
-📦 ${safe(item.gsm)}`
-        );
-        return;
-      }
     }
 
     await send(userId,"📦 Select Service",kb(SERVICE_MENU));
