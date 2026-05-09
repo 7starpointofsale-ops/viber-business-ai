@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 // =======================================
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 const ORDER_PATH = path.join(__dirname, "../database/orders.db.json");
-const TEMP_IMG = path.join(__dirname, "../uploads/temp.jpg");
+const TEMP_FILE = path.join(__dirname, "../uploads/temp.jpg");
 
 // =======================================
 // INIT FILES
@@ -73,12 +73,12 @@ function clean(t = "") {
 }
 
 // =======================================
-// SEND VIBER
+// SEND
 // =======================================
-async function send(userId, text, kb = null) {
+async function send(id, text, kb = null) {
   try {
     const body = {
-      receiver: userId,
+      receiver: id,
       type: "text",
       text,
       min_api_version: 7
@@ -120,9 +120,9 @@ function kb(items) {
 // =======================================
 // REMOVE BG CORE
 // =======================================
-async function removeBG(imagePath) {
+async function removeBG(file) {
   const form = new FormData();
-  form.append("image_file", fs.createReadStream(imagePath));
+  form.append("image_file", fs.createReadStream(file));
 
   const res = await axios.post(
     "https://api.remove.bg/v1.0/removebg",
@@ -140,26 +140,30 @@ async function removeBG(imagePath) {
 }
 
 // =======================================
-// IMAGE HANDLER (AUTO BG REMOVE)
+// IMAGE HANDLER (FIXED)
 // =======================================
 async function handleImage(body) {
   try {
     const userId = body.sender.id;
     const url = body.message.media;
 
+    if (!url) return;
+
     const img = await axios.get(url, { responseType: "arraybuffer" });
-    fs.writeFileSync(TEMP_IMG, img.data);
+    fs.writeFileSync(TEMP_FILE, img.data);
 
-    const result = await removeBG(TEMP_IMG);
+    const result = await removeBG(TEMP_FILE);
 
-    fs.unlinkSync(TEMP_IMG);
+    fs.unlinkSync(TEMP_FILE);
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
         receiver: userId,
         type: "picture",
-        media: "data:image/png;base64," + Buffer.from(result).toString("base64")
+        media:
+          "data:image/png;base64," +
+          Buffer.from(result).toString("base64")
       },
       {
         headers: {
@@ -167,9 +171,8 @@ async function handleImage(body) {
         }
       }
     );
-
   } catch (e) {
-    console.log("IMG ERROR:", e.message);
+    console.log("REMOVE BG ERROR:", e.message);
   }
 }
 
@@ -183,50 +186,53 @@ app.post("/webhook", async (req, res) => {
     const body = req.body;
     if (!body.event) return;
 
-    // IMAGE AUTO
+    // ✅ FIX: IMAGE DETECT (IMPORTANT)
     if (body.message?.type === "picture") {
       return handleImage(body);
     }
 
-    const userId = body.sender.id;
+    const id = body.sender.id;
 
-    const token = userId + "_" + body.message.token;
+    const token = id + "_" + body.message.token;
     if (msgCache[token]) return;
     msgCache[token] = true;
     setTimeout(() => delete msgCache[token], 30000);
 
     let msg = clean(body.message.text || "");
-
     const db = loadDB();
 
     // HOME
     if (["hi", "hello", "start", "menu", "home"].includes(msg)) {
-      userState[userId] = {};
-      return send(userId, "📦 7Star System", kb(MENU));
+      userState[id] = {};
+      return send(id, "📦 7Star System", kb(MENU));
     }
 
-    // MENU ACTIONS
+    // PRICE MENU
     if (msg === "price") {
       const cats = db.categories.map((c, i) => ({
         label: `📁 ${c.name}`,
         value: `cat_${i}`
       }));
-      return send(userId, "📁 Category", kb(cats));
+      return send(id, "📁 Category", kb(cats));
     }
 
+    // CALC MENU
     if (msg === "calc") {
-      userState[userId] = { mode: "calc" };
+      userState[id] = { mode: "calc" };
+
       const cats = db.categories.map((c, i) => ({
         label: `📁 ${c.name}`,
         value: `cat_${i}`
       }));
-      return send(userId, "🧮 Category", kb(cats));
+
+      return send(id, "🧮 Category", kb(cats));
     }
 
+    // BG REMOVE INSTRUCTION
     if (msg === "removebg") {
       return send(
-        userId,
-        "🖼 BG Remove\n\n📌 Photo တစ်ပုံပို့ပါ\nအလိုအလျောက် background ဖျက်ပေးမယ်"
+        id,
+        "🖼 BG ဖျက်ရန်\n\n📌 Photo တစ်ပုံပို့ပါ\nအလိုအလျောက် background ဖျက်ပေးမယ်"
       );
     }
 
@@ -241,17 +247,17 @@ app.post("/webhook", async (req, res) => {
         value: `item_${i}_${x}`
       }));
 
-      return send(userId, `📁 ${cat.name}`, kb(items));
+      return send(id, `📁 ${cat.name}`, kb(items));
     }
 
     // ITEM
     if (msg.startsWith("item_")) {
-      const [_, c, i] = msg.split("_");
+      const [, c, i] = msg.split("_");
       const item = db.categories?.[c]?.items?.[i];
       if (!item) return;
 
       return send(
-        userId,
+        id,
 `📄 ${item.item}
 📏 ${item.size || "-"}
 📦 ${item.gsm || "-"}
@@ -261,7 +267,7 @@ app.post("/webhook", async (req, res) => {
       );
     }
 
-    return send(userId, "📦 Menu", kb(MENU));
+    return send(id, "📦 Menu", kb(MENU));
 
   } catch (e) {
     console.log("WEBHOOK ERROR:", e.message);
