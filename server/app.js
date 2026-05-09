@@ -5,6 +5,7 @@ const axios = require("axios");
 const FormData = require("form-data");
 
 const app = express();
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -16,13 +17,13 @@ const DB_PATH = path.join(__dirname, "../database/price.db.json");
 // =======================================
 // INIT DB
 // =======================================
-function ensure(file, fallback) {
+function ensureFile(file, fallback) {
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, JSON.stringify(fallback, null, 2));
   }
 }
 
-ensure(DB_PATH, { categories: [] });
+ensureFile(DB_PATH, { categories: [] });
 
 // =======================================
 // CACHE
@@ -34,10 +35,14 @@ function loadDB() {
   const now = Date.now();
   if (cache && now - last < 3000) return cache;
 
-  cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-  if (!cache.categories) cache.categories = [];
-  last = now;
-  return cache;
+  try {
+    cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+    if (!cache.categories) cache.categories = [];
+    last = now;
+    return cache;
+  } catch {
+    return { categories: [] };
+  }
 }
 
 // =======================================
@@ -63,7 +68,7 @@ function clean(t = "") {
 }
 
 // =======================================
-// SEND
+// SEND MESSAGE
 // =======================================
 async function send(id, text, kb = null) {
   try {
@@ -110,9 +115,9 @@ function kb(items) {
 // =======================================
 // REMOVE BG
 // =======================================
-async function removeBG(file) {
+async function removeBG(buffer) {
   const form = new FormData();
-  form.append("image_file", fs.createReadStream(file));
+  form.append("image_file", buffer, "image.jpg");
 
   const res = await axios.post(
     "https://api.remove.bg/v1.0/removebg",
@@ -122,8 +127,7 @@ async function removeBG(file) {
       headers: {
         ...form.getHeaders(),
         "X-Api-Key": process.env.REMOVE_BG_KEY
-      },
-      timeout: 20000
+      }
     }
   );
 
@@ -131,30 +135,22 @@ async function removeBG(file) {
 }
 
 // =======================================
-// IMAGE HANDLER (FIXED)
+// IMAGE HANDLER (IMPORTANT)
 // =======================================
-async function handleImage(body, id) {
+async function handleImage(body, userId) {
   try {
-    const url = body.message.media;
+    const imgUrl = body.message.media;
 
-    if (!url) {
-      return send(id, "❌ Image မရပါ");
-    }
-
-    const img = await axios.get(url, {
+    const img = await axios.get(imgUrl, {
       responseType: "arraybuffer"
     });
 
-    const file = path.join(__dirname, "../uploads/tmp.jpg");
-    fs.writeFileSync(file, img.data);
-
-    const result = await removeBG(file);
-    fs.unlinkSync(file);
+    const result = await removeBG(img.data);
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
-        receiver: id,
+        receiver: userId,
         type: "picture",
         media:
           "data:image/png;base64," +
@@ -169,7 +165,7 @@ async function handleImage(body, id) {
 
   } catch (e) {
     console.log("BG ERROR:", e.message);
-    await send(id, "❌ BG Remove Failed");
+    await send(userId, "❌ BG remove failed");
   }
 }
 
@@ -194,14 +190,11 @@ app.post("/webhook", async (req, res) => {
     const db = loadDB();
 
     // ===================================
-    // IMAGE DETECT (FIXED STABLE)
+    // IMAGE AUTO BG REMOVE
     // ===================================
-    const isImage =
-      body.message?.type === "picture" ||
-      body.message?.media;
-
-    if (isImage && userState[id]?.mode === "bg") {
-      return handleImage(body, id);
+    if (body.message?.type === "picture") {
+      await handleImage(body, id);
+      return;
     }
 
     // ===================================
@@ -212,16 +205,19 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ===================================
-    // BG MODE (FIXED TRIGGER)
+    // BG MODE (IMPORTANT UX FIX)
     // ===================================
-    if (msg === "bg" || msg === "🖼 bg remove") {
+    if (msg === "bg") {
       userState[id] = { mode: "bg" };
 
-      return send(id,
-`🖼 BG Remove Mode ON
+      return send(
+        id,
+`🖼 BG Remove Mode
 
-👉 Photo တစ်ပုံပို့ပါ
-👉 Auto background remove လုပ်မယ်`
+👉 Photo ပို့လိုက်ပါ
+👉 Auto background remove လုပ်မယ်
+
+⚠️ Upload button မလိုပါ (Viber limitation)`
       );
     }
 
@@ -275,7 +271,8 @@ app.post("/webhook", async (req, res) => {
       const item = db.categories?.[c]?.items?.[i];
       if (!item) return;
 
-      return send(id,
+      return send(
+        id,
 `📄 ${item.item}
 📏 ${item.size || "-"}
 📦 ${item.gsm || "-"}
