@@ -9,24 +9,25 @@ const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// =========================
+// =======================================
 // PATH
-// =========================
+// =======================================
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
-// =========================
+// =======================================
 // INIT DB
-// =========================
+// =======================================
 function ensure(file, fallback) {
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, JSON.stringify(fallback, null, 2));
   }
 }
+
 ensure(DB_PATH, { categories: [] });
 
-// =========================
+// =======================================
 // CACHE
-// =========================
+// =======================================
 let cache = null;
 let last = 0;
 
@@ -34,41 +35,41 @@ function loadDB() {
   const now = Date.now();
   if (cache && now - last < 3000) return cache;
 
-  cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-  if (!cache.categories) cache.categories = [];
-  last = now;
-  return cache;
+  try {
+    cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+    if (!cache.categories) cache.categories = [];
+    last = now;
+    return cache;
+  } catch {
+    return { categories: [] };
+  }
 }
 
-// =========================
+// =======================================
 // STATE
-// =========================
+// =======================================
 const userState = {};
 const msgCache = {};
 
-// =========================
+// =======================================
 // MENU
-// =========================
+// =======================================
 const MENU = [
   { label: "💰 Price", value: "price" },
   { label: "🧮 Calc", value: "calc" },
   { label: "🖼 BG Remove", value: "bg" }
 ];
 
-// =========================
+// =======================================
 // NORMALIZE
-// =========================
+// =======================================
 function clean(t = "") {
-  return t
-    .replace(/🖼/g, "")
-    .replace(/\u200B/g, "")
-    .trim()
-    .toLowerCase();
+  return t.replace(/\u200B/g, "").trim().toLowerCase();
 }
 
-// =========================
-// SEND MESSAGE
-// =========================
+// =======================================
+// SEND VIBER
+// =======================================
 async function send(id, text, kb = null) {
   try {
     const body = {
@@ -94,9 +95,9 @@ async function send(id, text, kb = null) {
   }
 }
 
-// =========================
+// =======================================
 // KEYBOARD
-// =========================
+// =======================================
 function kb(items) {
   return {
     Type: "keyboard",
@@ -106,17 +107,17 @@ function kb(items) {
       ActionType: "reply",
       ActionBody: i.value,
       BgColor: "#2d3748",
-      Text: `<font color="#fff">${i.label}</font>`
+      Text: `<font color="#ffffff">${i.label}</font>`
     }))
   };
 }
 
-// =========================
+// =======================================
 // REMOVE BG CORE
-// =========================
-async function removeBG(buffer) {
+// =======================================
+async function removeBG(file) {
   const form = new FormData();
-  form.append("image_file", buffer, "image.jpg");
+  form.append("image_file", fs.createReadStream(file));
 
   const res = await axios.post(
     "https://api.remove.bg/v1.0/removebg",
@@ -134,18 +135,26 @@ async function removeBG(buffer) {
   return res.data;
 }
 
-// =========================
+// =======================================
 // IMAGE HANDLER
-// =========================
+// =======================================
 async function handleImage(body, id) {
   try {
     const url = body.message.media;
 
     const img = await axios.get(url, {
-      responseType: "arraybuffer"
+      responseType: "arraybuffer",
+      timeout: 20000
     });
 
-    const result = await removeBG(img.data);
+    const file = path.join(__dirname, "../uploads/tmp.jpg");
+    fs.writeFileSync(file, img.data);
+
+    const result = await removeBG(file);
+
+    fs.unlinkSync(file);
+
+    delete userState[id];
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
@@ -169,9 +178,9 @@ async function handleImage(body, id) {
   }
 }
 
-// =========================
+// =======================================
 // WEBHOOK
-// =========================
+// =======================================
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
@@ -187,44 +196,53 @@ app.post("/webhook", async (req, res) => {
     setTimeout(() => delete msgCache[token], 30000);
 
     const msg = clean(body.message?.text || "");
+
     const db = loadDB();
 
-    // =========================
-    // PHOTO HANDLER (CRITICAL)
-    // =========================
-    if (body.message?.type === "picture") {
-      if (userState[id]?.mode === "bg") {
-        return handleImage(body, id);
-      }
-
-      return send(id, "🖼 BG mode မဖွင့်သေးပါ\n👉 BG Remove ကိုနှိပ်ပါ");
+    // ===================================
+    // IMAGE AUTO DETECT
+    // ===================================
+    if (
+      body.message &&
+      body.message.type === "picture" &&
+      body.message.media &&
+      userState[id]?.mode === "bg"
+    ) {
+      return handleImage(body, id);
     }
 
-    // =========================
+    // ===================================
     // HOME
-    // =========================
+    // ===================================
     if (["hi", "hello", "home", "menu"].includes(msg)) {
       delete userState[id];
       return send(id, "📦 7Star System", kb(MENU));
     }
 
-    // =========================
-    // BG MODE FIXED
-    // =========================
-    if (msg.includes("bg")) {
+    // ===================================
+    // BG MODE FIX
+    // ===================================
+    const bgTriggers = new Set([
+      "bg",
+      "🖼 bg remove",
+      "🖼 bg",
+      "remove bg"
+    ]);
+
+    if (bgTriggers.has(msg)) {
       userState[id] = { mode: "bg" };
 
       return send(id,
 `🖼 BG Remove Mode
 
-👉 Photo ပို့ပါ
-👉 Auto remove လုပ်မယ်`
+👉 photo တစ်ပုံပို့ပါ
+👉 auto background ဖျက်မယ်`
       );
     }
 
-    // =========================
+    // ===================================
     // PRICE
-    // =========================
+    // ===================================
     if (msg === "price") {
       const cats = db.categories.map((c, i) => ({
         label: `📁 ${c.name}`,
@@ -234,9 +252,9 @@ app.post("/webhook", async (req, res) => {
       return send(id, "📁 Category", kb(cats));
     }
 
-    // =========================
+    // ===================================
     // CALC
-    // =========================
+    // ===================================
     if (msg === "calc") {
       userState[id] = { mode: "calc" };
 
@@ -248,41 +266,6 @@ app.post("/webhook", async (req, res) => {
       return send(id, "🧮 Category", kb(cats));
     }
 
-    // =========================
-    // CATEGORY
-    // =========================
-    if (msg.startsWith("cat_")) {
-      const i = Number(msg.split("_")[1]);
-      const cat = db.categories[i];
-      if (!cat) return;
-
-      const items = cat.items.map((it, x) => ({
-        label: `📄 ${it.item}`,
-        value: `item_${i}_${x}`
-      }));
-
-      return send(id, cat.name, kb(items));
-    }
-
-    // =========================
-    // ITEM
-    // =========================
-    if (msg.startsWith("item_")) {
-      const [, c, i] = msg.split("_");
-      const item = db.categories?.[c]?.items?.[i];
-      if (!item) return;
-
-      return send(
-        id,
-`📄 ${item.item}
-📏 ${item.size || "-"}
-📦 ${item.gsm || "-"}
-
-💰 1 Side: ${item.s1}
-💰 2 Side: ${item.s2}`
-      );
-    }
-
     return send(id, "📦 Menu", kb(MENU));
 
   } catch (e) {
@@ -290,6 +273,6 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// =========================
+// =======================================
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log("🚀 RUNNING ON", PORT));
