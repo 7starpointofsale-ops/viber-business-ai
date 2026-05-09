@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================================
-// INIT
+// INIT FILE
 // =======================================
 function ensure(file, fallback) {
   if (!fs.existsSync(file)) {
@@ -37,14 +37,10 @@ function loadDB() {
   const now = Date.now();
   if (cache && now - last < 3000) return cache;
 
-  try {
-    cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-    if (!cache.categories) cache.categories = [];
-    last = now;
-    return cache;
-  } catch {
-    return { categories: [] };
-  }
+  cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+  if (!cache.categories) cache.categories = [];
+  last = now;
+  return cache;
 }
 
 // =======================================
@@ -138,9 +134,9 @@ async function removeBG(file) {
 }
 
 // =======================================
-// IMAGE HANDLER (BG MODE ONLY)
+// IMAGE HANDLER
 // =======================================
-async function handleImage(body, userId) {
+async function handleImage(body, id) {
   try {
     const url = body.message.media;
 
@@ -156,13 +152,12 @@ async function handleImage(body, userId) {
 
     fs.unlinkSync(file);
 
-    // EXIT BG MODE
-    delete userState[userId];
+    delete userState[id];
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
-        receiver: userId,
+        receiver: id,
         type: "picture",
         media:
           "data:image/png;base64," +
@@ -177,7 +172,7 @@ async function handleImage(body, userId) {
 
   } catch (e) {
     console.log("BG ERROR:", e.message);
-    await send(userId, "❌ BG failed");
+    await send(id, "❌ BG remove failed");
   }
 }
 
@@ -202,33 +197,46 @@ app.post("/webhook", async (req, res) => {
     const db = loadDB();
 
     // ===================================
-    // 🔥 BG IMAGE DETECT (STATE CHECK)
+    // BG IMAGE DETECT (SAFE)
     // ===================================
-    if (body.message && body.message.type === "picture") {
+    if (
+      body.message &&
+      (body.message.media || body.message.type === "picture")
+    ) {
       if (userState[id]?.mode === "bg") {
         return handleImage(body, id);
       }
     }
 
+    // ===================================
     // HOME
+    // ===================================
     if (["hi", "hello", "home", "menu"].includes(msg)) {
       return send(id, "📦 7Star System", kb(MENU));
     }
 
-    // BG MODE START
+    // ===================================
+    // BG START (FIXED UX)
+    // ===================================
     if (msg === "bg") {
       userState[id] = { mode: "bg" };
 
       return send(
         id,
-`🖼 BG Remove Mode
+`🖼 Background Remove Mode
 
-👉 Photo တစ်ပုံပို့ပါ
-Auto background ဖျက်မယ်`
+👉 လုပ်ရန်:
+1️⃣ Gallery ထဲက photo ရွေးပါ
+2️⃣ Chat ထဲပို့ပါ
+3️⃣ Auto remove လုပ်မယ်
+
+⚠️ Upload popup မပေါ်နိုင်ပါ (Viber limitation)`
       );
     }
 
+    // ===================================
     // PRICE
+    // ===================================
     if (msg === "price") {
       const cats = db.categories.map((c, i) => ({
         label: `📁 ${c.name}`,
@@ -238,7 +246,9 @@ Auto background ဖျက်မယ်`
       return send(id, "📁 Category", kb(cats));
     }
 
+    // ===================================
     // CALC
+    // ===================================
     if (msg === "calc") {
       userState[id] = { mode: "calc" };
 
@@ -250,7 +260,9 @@ Auto background ဖျက်မယ်`
       return send(id, "🧮 Category", kb(cats));
     }
 
+    // ===================================
     // CATEGORY
+    // ===================================
     if (msg.startsWith("cat_")) {
       const i = Number(msg.split("_")[1]);
       const cat = db.categories[i];
@@ -264,7 +276,9 @@ Auto background ဖျက်မယ်`
       return send(id, cat.name, kb(items));
     }
 
+    // ===================================
     // ITEM
+    // ===================================
     if (msg.startsWith("item_")) {
       const [, c, i] = msg.split("_");
       const item = db.categories?.[c]?.items?.[i];
