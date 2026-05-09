@@ -2,8 +2,8 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
-const multer = require("multer");
 const FormData = require("form-data");
+const multer = require("multer");
 
 const upload = multer({ dest: "uploads/" });
 const app = express();
@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ===================== DB =====================
+// ===================== PATH =====================
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 function ensure(file, fallback) {
@@ -19,13 +19,16 @@ function ensure(file, fallback) {
     fs.writeFileSync(file, JSON.stringify(fallback, null, 2));
   }
 }
+
 ensure(DB_PATH, { categories: [] });
 
+// ===================== CACHE =====================
 let cache = null;
 
 function loadDB() {
   try {
     cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+    if (!cache.categories) cache.categories = [];
     return cache;
   } catch {
     return { categories: [] };
@@ -49,7 +52,8 @@ async function send(id, text, kb = null) {
     const body = {
       receiver: id,
       type: "text",
-      text
+      text,
+      min_api_version: 7
     };
 
     if (kb) body.keyboard = kb;
@@ -96,7 +100,8 @@ async function removeBG(file) {
       headers: {
         ...form.getHeaders(),
         "X-Api-Key": process.env.REMOVE_BG_KEY
-      }
+      },
+      timeout: 30000
     }
   );
 
@@ -106,12 +111,15 @@ async function removeBG(file) {
 // ===================== IMAGE HANDLER =====================
 async function handleImage(body, userId) {
   try {
-    const url = body.message.media;
+    const url = body.message?.media;
 
-    if (!url) return send(userId, "❌ No image received");
+    if (!url) {
+      return send(userId, "❌ Image မရပါ");
+    }
 
     const img = await axios.get(url, {
-      responseType: "arraybuffer"
+      responseType: "arraybuffer",
+      timeout: 20000
     });
 
     const file = path.join(__dirname, "../uploads/tmp.jpg");
@@ -151,15 +159,18 @@ app.post("/webhook", async (req, res) => {
 
   const userId = body.sender.id;
 
-  // anti spam
-  const key = userId + "_" + (body.message?.token || "");
-  if (msgCache[key]) return;
-  msgCache[key] = true;
-
-  setTimeout(() => delete msgCache[key], 30000);
+  const token = userId + "_" + (body.message?.token || "");
+  if (msgCache[token]) return;
+  msgCache[token] = true;
+  setTimeout(() => delete msgCache[token], 30000);
 
   const msg = (body.message?.text || "").toLowerCase().trim();
   const db = loadDB();
+
+  // ================= HOME =================
+  if (["hi", "hello", "home", "menu"].includes(msg)) {
+    return send(userId, "📦 7Star System", kb(MENU));
+  }
 
   // ================= BG MODE =================
   if (msg === "bg") {
@@ -174,20 +185,15 @@ app.post("/webhook", async (req, res) => {
     );
   }
 
-  // ================= MENU =================
-  if (["hi", "hello", "home", "menu"].includes(msg)) {
-    return send(userId, "📦 7Star BG Bot", kb(MENU));
-  }
-
-  // ================= PHOTO =================
+  // ================= IMAGE =================
   if (body.message?.type === "picture") {
     if (userState[userId]?.mode === "bg") {
       return handleImage(body, userId);
     }
   }
 
-  // ================= BUTTON =================
-  if (msg === "price") return send(userId, "Price list coming...");
+  // ================= MENU =================
+  if (msg === "price") return send(userId, "Price list...");
   if (msg === "calc") return send(userId, "Calc mode...");
 
   return send(userId, "📦 Menu", kb(MENU));
