@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 // =======================================
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 const ORDER_PATH = path.join(__dirname, "../database/orders.db.json");
-const TEMP_FILE = path.join(__dirname, "../uploads/temp.jpg");
+const TMP_FILE = path.join(__dirname, "../uploads/tmp.jpg");
 
 // =======================================
 // INIT FILES
@@ -132,7 +132,8 @@ async function removeBG(file) {
       headers: {
         ...form.getHeaders(),
         "X-Api-Key": process.env.REMOVE_BG_KEY
-      }
+      },
+      timeout: 20000
     }
   );
 
@@ -140,21 +141,29 @@ async function removeBG(file) {
 }
 
 // =======================================
-// IMAGE HANDLER (FIXED)
+// IMAGE HANDLER (FIXED + SAFE)
 // =======================================
 async function handleImage(body) {
   try {
     const userId = body.sender.id;
-    const url = body.message.media;
+
+    const url =
+      body.message.media ||
+      body.message.file ||
+      body.message.url;
 
     if (!url) return;
 
-    const img = await axios.get(url, { responseType: "arraybuffer" });
-    fs.writeFileSync(TEMP_FILE, img.data);
+    const img = await axios.get(url, {
+      responseType: "arraybuffer",
+      timeout: 20000
+    });
 
-    const result = await removeBG(TEMP_FILE);
+    fs.writeFileSync(TMP_FILE, img.data);
 
-    fs.unlinkSync(TEMP_FILE);
+    const result = await removeBG(TMP_FILE);
+
+    fs.unlinkSync(TMP_FILE);
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
@@ -171,13 +180,14 @@ async function handleImage(body) {
         }
       }
     );
+
   } catch (e) {
     console.log("REMOVE BG ERROR:", e.message);
   }
 }
 
 // =======================================
-// WEBHOOK
+// WEBHOOK (FIXED IMAGE DETECTION)
 // =======================================
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
@@ -186,19 +196,28 @@ app.post("/webhook", async (req, res) => {
     const body = req.body;
     if (!body.event) return;
 
-    // ✅ FIX: IMAGE DETECT (IMPORTANT)
-    if (body.message?.type === "picture") {
-      return handleImage(body);
-    }
-
     const id = body.sender.id;
 
-    const token = id + "_" + body.message.token;
+    const token = id + "_" + (body.message?.token || "");
     if (msgCache[token]) return;
     msgCache[token] = true;
     setTimeout(() => delete msgCache[token], 30000);
 
-    let msg = clean(body.message.text || "");
+    // ===================================
+    // 🔥 FIX: IMAGE DETECTION (IMPORTANT)
+    // ===================================
+    if (
+      body.message &&
+      (
+        body.message.type === "picture" ||
+        body.message.media ||
+        body.message.file
+      )
+    ) {
+      return handleImage(body);
+    }
+
+    let msg = clean(body.message?.text || "");
     const db = loadDB();
 
     // HOME
@@ -228,11 +247,14 @@ app.post("/webhook", async (req, res) => {
       return send(id, "🧮 Category", kb(cats));
     }
 
-    // BG REMOVE INSTRUCTION
+    // BG HELP
     if (msg === "removebg") {
       return send(
         id,
-        "🖼 BG ဖျက်ရန်\n\n📌 Photo တစ်ပုံပို့ပါ\nအလိုအလျောက် background ဖျက်ပေးမယ်"
+`🖼 BG ဖျက်ရန်
+
+📌 Photo တစ်ပုံပို့ပါ
+အလိုအလျောက် background ဖျက်ပေးမယ်`
       );
     }
 
