@@ -15,11 +15,9 @@ app.use(express.urlencoded({ extended: true }));
 // PATH
 // =======================================
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
-const ORDER_PATH = path.join(__dirname, "../database/orders.db.json");
-const TMP_FILE = path.join(__dirname, "../uploads/tmp.jpg");
 
 // =======================================
-// INIT FILES
+// INIT
 // =======================================
 function ensure(file, fallback) {
   if (!fs.existsSync(file)) {
@@ -28,7 +26,6 @@ function ensure(file, fallback) {
 }
 
 ensure(DB_PATH, { categories: [] });
-ensure(ORDER_PATH, { orders: [] });
 
 // =======================================
 // CACHE
@@ -60,9 +57,9 @@ const msgCache = {};
 // MENU
 // =======================================
 const MENU = [
-  { label: "💰 ဈေးမေးမယ်", value: "price" },
-  { label: "🧮 ဈေးတွက်မယ်", value: "calc" },
-  { label: "🖼 BG ဖျက်မယ်", value: "removebg" }
+  { label: "💰 Price", value: "price" },
+  { label: "🧮 Calc", value: "calc" },
+  { label: "🖼 BG Remove", value: "bg" }
 ];
 
 // =======================================
@@ -111,8 +108,8 @@ function kb(items) {
       Rows: 1,
       ActionType: "reply",
       ActionBody: i.value,
-      Text: `<font color="#ffffff">${i.label}</font>`,
-      BgColor: "#2d3748"
+      BgColor: "#2d3748",
+      Text: `<font color="#fff">${i.label}</font>`
     }))
   };
 }
@@ -141,29 +138,26 @@ async function removeBG(file) {
 }
 
 // =======================================
-// IMAGE HANDLER (FIXED + SAFE)
+// IMAGE HANDLER (BG MODE ONLY)
 // =======================================
-async function handleImage(body) {
+async function handleImage(body, userId) {
   try {
-    const userId = body.sender.id;
-
-    const url =
-      body.message.media ||
-      body.message.file ||
-      body.message.url;
-
-    if (!url) return;
+    const url = body.message.media;
 
     const img = await axios.get(url, {
       responseType: "arraybuffer",
       timeout: 20000
     });
 
-    fs.writeFileSync(TMP_FILE, img.data);
+    const file = path.join(__dirname, "../uploads/tmp.jpg");
+    fs.writeFileSync(file, img.data);
 
-    const result = await removeBG(TMP_FILE);
+    const result = await removeBG(file);
 
-    fs.unlinkSync(TMP_FILE);
+    fs.unlinkSync(file);
+
+    // EXIT BG MODE
+    delete userState[userId];
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
@@ -182,12 +176,13 @@ async function handleImage(body) {
     );
 
   } catch (e) {
-    console.log("REMOVE BG ERROR:", e.message);
+    console.log("BG ERROR:", e.message);
+    await send(userId, "❌ BG failed");
   }
 }
 
 // =======================================
-// WEBHOOK (FIXED IMAGE DETECTION)
+// WEBHOOK
 // =======================================
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
@@ -203,39 +198,47 @@ app.post("/webhook", async (req, res) => {
     msgCache[token] = true;
     setTimeout(() => delete msgCache[token], 30000);
 
-    // ===================================
-    // 🔥 FIX: IMAGE DETECTION (IMPORTANT)
-    // ===================================
-    if (
-      body.message &&
-      (
-        body.message.type === "picture" ||
-        body.message.media ||
-        body.message.file
-      )
-    ) {
-      return handleImage(body);
-    }
-
-    let msg = clean(body.message?.text || "");
+    const msg = clean(body.message?.text || "");
     const db = loadDB();
 
+    // ===================================
+    // 🔥 BG IMAGE DETECT (STATE CHECK)
+    // ===================================
+    if (body.message && body.message.type === "picture") {
+      if (userState[id]?.mode === "bg") {
+        return handleImage(body, id);
+      }
+    }
+
     // HOME
-    if (["hi", "hello", "start", "menu", "home"].includes(msg)) {
-      userState[id] = {};
+    if (["hi", "hello", "home", "menu"].includes(msg)) {
       return send(id, "📦 7Star System", kb(MENU));
     }
 
-    // PRICE MENU
+    // BG MODE START
+    if (msg === "bg") {
+      userState[id] = { mode: "bg" };
+
+      return send(
+        id,
+`🖼 BG Remove Mode
+
+👉 Photo တစ်ပုံပို့ပါ
+Auto background ဖျက်မယ်`
+      );
+    }
+
+    // PRICE
     if (msg === "price") {
       const cats = db.categories.map((c, i) => ({
         label: `📁 ${c.name}`,
         value: `cat_${i}`
       }));
+
       return send(id, "📁 Category", kb(cats));
     }
 
-    // CALC MENU
+    // CALC
     if (msg === "calc") {
       userState[id] = { mode: "calc" };
 
@@ -245,17 +248,6 @@ app.post("/webhook", async (req, res) => {
       }));
 
       return send(id, "🧮 Category", kb(cats));
-    }
-
-    // BG HELP
-    if (msg === "removebg") {
-      return send(
-        id,
-`🖼 BG ဖျက်ရန်
-
-📌 Photo တစ်ပုံပို့ပါ
-အလိုအလျောက် background ဖျက်ပေးမယ်`
-      );
     }
 
     // CATEGORY
@@ -269,7 +261,7 @@ app.post("/webhook", async (req, res) => {
         value: `item_${i}_${x}`
       }));
 
-      return send(id, `📁 ${cat.name}`, kb(items));
+      return send(id, cat.name, kb(items));
     }
 
     // ITEM
