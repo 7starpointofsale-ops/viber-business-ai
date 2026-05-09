@@ -16,17 +16,18 @@ app.use(express.urlencoded({ extended: true }));
 // =======================================
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 const ORDER_DB = path.join(__dirname, "../database/orders.db.json");
+const UPLOAD_PATH = path.join(__dirname, "../uploads/viber.jpg");
 
 // =======================================
-// STATIC
+// STATIC ADMIN
 // =======================================
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================================
 // INIT FILES
 // =======================================
-function ensureFile(file, fallback) {
-  if (!fs.existsSync(file)) {
+function ensureFile(file, fallback){
+  if(!fs.existsSync(file)){
     fs.writeFileSync(file, JSON.stringify(fallback, null, 2));
   }
 }
@@ -37,108 +38,70 @@ ensureFile(ORDER_DB, { orders: [] });
 // =======================================
 // CACHE
 // =======================================
-let dbCache = null;
-let lastLoad = 0;
+let cache=null;
+let last=0;
 
-function loadDB() {
-  const now = Date.now();
-  if (dbCache && now - lastLoad < 3000) return dbCache;
+function loadDB(){
+  const now=Date.now();
+  if(cache && now-last<3000) return cache;
 
-  try {
-    dbCache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-    if (!dbCache.categories) dbCache.categories = [];
-    lastLoad = now;
-    return dbCache;
-  } catch {
-    return { categories: [] };
+  try{
+    cache = JSON.parse(fs.readFileSync(DB_PATH,"utf8"));
+    if(!cache.categories) cache.categories=[];
+    last=now;
+    return cache;
+  }catch{
+    return {categories:[]};
   }
 }
 
-// =======================================
-// SAVE DB (IMPORTANT)
-// =======================================
 function saveDB(data){
-  dbCache = data;
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+  cache=data;
+  fs.writeFileSync(DB_PATH, JSON.stringify(data,null,2));
 }
 
 // =======================================
 // STATE
 // =======================================
-const userState = {};
-const recentMessages = {};
+const userState={};
+const recent={};
 
 // =======================================
-// TRIGGERS
+// MENU
 // =======================================
-const HOME_TRIGGERS = new Set([
-  "hi","hello","start","menu","home","back","မင်္ဂလာပါ"
-]);
-
-const SERVICE_MENU = [
-  { label: "💰 ဈေးမေးမယ်", value: "service_price" },
-  { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
+const MENU=[
+  {label:"💰 ဈေးမေးမယ်", value:"price"},
+  {label:"🧮 ဈေးတွက်မယ်", value:"calc"}
 ];
-
-const commandMap = {
-  "ဈေးတွက်မယ်":"service_calc",
-  "ဈေးမေးမယ်":"service_price",
-  "calc":"service_calc",
-  "price":"service_price"
-};
 
 // =======================================
 // CLEAN
 // =======================================
-function normalizeText(text="") {
-  return text.replace(/\u200B/g,"").trim().toLowerCase();
-}
-
-function normalizeNumber(msg="") {
-  const map = {
-    "၀":"0","၁":"1","၂":"2","၃":"3","၄":"4",
-    "၅":"5","၆":"6","၇":"7","၈":"8","၉":"9"
-  };
-  return msg.split("").map(c => map[c] ?? c).join("");
-}
-
-function isNumber(msg){
-  return /^\d+$/.test(normalizeNumber(msg));
-}
-
-function formatPrice(n){
-  return Number(n||0).toLocaleString();
-}
-
-function safe(v){
-  return (v===undefined||v===null||v==="") ? "-" : v;
+function clean(t=""){
+  return t.replace(/\u200B/g,"").trim().toLowerCase();
 }
 
 // =======================================
-// SEND VIBER
+// SEND
 // =======================================
-async function send(userId, text, keyboard=null){
-  try {
-    const body = {
-      receiver: userId,
-      type: "text",
+async function send(id,text,kb=null){
+  try{
+    const body={
+      receiver:id,
+      type:"text",
       text,
-      min_api_version: 7
+      min_api_version:7
     };
 
-    if(keyboard) body.keyboard = keyboard;
+    if(kb) body.keyboard=kb;
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       body,
-      {
-        headers: {
-          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
-        }
-      }
+      { headers:{ "X-Viber-Auth-Token":process.env.VIBER_TOKEN } }
     );
-  } catch(e){
-    console.log("SEND ERROR:", e.message);
+  }catch(e){
+    console.log("SEND ERROR",e.message);
   }
 }
 
@@ -148,110 +111,32 @@ async function send(userId, text, keyboard=null){
 function kb(items){
   return {
     Type:"keyboard",
-    DefaultHeight:false,
-    Buttons: items.map(i=>({
+    Buttons:items.map(i=>({
       Columns:3,
       Rows:1,
-      BgColor:"#2d3748",
       ActionType:"reply",
       ActionBody:i.value,
-      Text:`<font color="#fff">${i.label}</font>`
+      Text:`<font color="#fff">${i.label}</font>`,
+      BgColor:"#2d3748"
     }))
   };
 }
 
 // =======================================
-// SMART SEARCH
-// =======================================
-function findItemSmart(db,msg){
-  let best=null,bestScore=0;
-  const tokens=msg.split(" ");
-
-  db.categories.forEach(c=>{
-    (c.items||[]).forEach(i=>{
-      let score=0;
-
-      const name=(i.item||"").toLowerCase();
-      const size=(i.size||"").toLowerCase();
-      const gsm=(i.gsm||"").toLowerCase();
-
-      tokens.forEach(t=>{
-        if(name.includes(t)) score+=5;
-        if(size.includes(t)) score+=3;
-        if(gsm.includes(t)) score+=2;
-      });
-
-      if(score>bestScore){
-        bestScore=score;
-        best=i;
-      }
-    });
-  });
-
-  return best;
-}
-
-// =======================================
-// 🔥 ADMIN SAVE API (FIXED)
-// =======================================
-app.post("/api/prices/add",(req,res)=>{
-  try {
-    const db = loadDB();
-
-    const {
-      categoryIndex,
-      item,
-      size,
-      gsm,
-      s1,
-      s2,
-      noSide,
-      lamination,
-      remark
-    } = req.body;
-
-    if(!db.categories[categoryIndex]){
-      return res.json({ok:false,message:"Category not found"});
-    }
-
-    db.categories[categoryIndex].items.push({
-      item,
-      size,
-      gsm,
-      s1:Number(s1||0),
-      s2:Number(s2||0),
-      noSide:noSide||false,
-      lamination:lamination||"",
-      remark:remark||""
-    });
-
-    saveDB(db);
-
-    res.json({ok:true});
-
-  } catch(e){
-    console.log("SAVE ERROR:", e.message);
-    res.json({ok:false});
-  }
-});
-
-// =======================================
-// REMOVE BG + IMAGE HANDLER
+// REMOVE BG IMAGE HANDLER
 // =======================================
 async function handleImage(body){
-  try {
-    const userId = body.sender.id;
-    const imageUrl = body.message.media;
+  try{
+    const userId=body.sender.id;
+    const url=body.message.media;
 
-    const img = await axios.get(imageUrl,{responseType:"arraybuffer"});
+    const img=await axios.get(url,{responseType:"arraybuffer"});
+    fs.writeFileSync(UPLOAD_PATH,img.data);
 
-    const filePath = path.join(__dirname,"../uploads/viber.jpg");
-    fs.writeFileSync(filePath,img.data);
+    const form=new FormData();
+    form.append("image_file",fs.createReadStream(UPLOAD_PATH));
 
-    const form = new FormData();
-    form.append("image_file",fs.createReadStream(filePath));
-
-    const bg = await axios.post(
+    const res=await axios.post(
       "https://api.remove.bg/v1.0/removebg",
       form,
       {
@@ -263,120 +148,144 @@ async function handleImage(body){
       }
     );
 
-    fs.unlinkSync(filePath);
+    fs.unlinkSync(UPLOAD_PATH);
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
         receiver:userId,
         type:"picture",
-        media:"data:image/png;base64," + Buffer.from(bg.data).toString("base64")
+        media:"data:image/png;base64,"+Buffer.from(res.data).toString("base64")
       },
-      {
-        headers:{
-          "X-Viber-Auth-Token":process.env.VIBER_TOKEN
-        }
-      }
+      { headers:{ "X-Viber-Auth-Token":process.env.VIBER_TOKEN } }
     );
 
-  } catch(e){
-    console.log("IMAGE ERROR:",e.message);
+  }catch(e){
+    console.log("IMAGE ERROR",e.message);
   }
 }
 
 // =======================================
+// ADMIN SAVE API
+// =======================================
+app.post("/api/prices/add",(req,res)=>{
+  try{
+    const db=loadDB();
+
+    const {
+      categoryIndex,
+      item,
+      size,
+      gsm,
+      s1,
+      s2,
+      noSide
+    }=req.body;
+
+    if(!db.categories[categoryIndex]){
+      return res.json({ok:false});
+    }
+
+    db.categories[categoryIndex].items.push({
+      item,
+      size,
+      gsm,
+      s1:Number(s1||0),
+      s2:Number(s2||0),
+      noSide:noSide||false
+    });
+
+    saveDB(db);
+
+    res.json({ok:true});
+
+  }catch(e){
+    res.json({ok:false});
+  }
+});
+
+// =======================================
 // WEBHOOK
 // =======================================
-app.post("/webhook", async (req,res)=>{
+app.post("/webhook",async(req,res)=>{
   res.sendStatus(200);
 
-  try {
+  try{
     const body=req.body;
-    if(body.event!=="message") return;
+    if(!body.event) return;
 
-    if(body.message.type==="picture"){
+    // 🔥 FIX IMAGE DETECT (IMPORTANT)
+    if(body.message && body.message.media){
       await handleImage(body);
       return;
     }
 
-    const userId=body.sender.id;
+    const id=body.sender.id;
+    const token=id+"_"+body.message.token;
 
-    const msgToken=userId+"_"+body.message.token;
-    if(recentMessages[msgToken]) return;
+    if(recent[token]) return;
+    recent[token]=true;
+    setTimeout(()=>delete recent[token],60000);
 
-    recentMessages[msgToken]=true;
-    setTimeout(()=>delete recentMessages[msgToken],30000);
+    let msg=clean(body.message.text||"");
 
-    let msg = normalizeText(body.message.text||"");
-    msg = commandMap[msg] || msg;
-    msg = normalizeNumber(msg);
-
-    const db = loadDB();
-    const state = userState[userId];
-
-    if(HOME_TRIGGERS.has(msg)){
-      delete userState[userId];
-      await send(userId,"📦 7Star System",kb(SERVICE_MENU));
-      return;
+    if(["hi","hello","start","home","menu"].includes(msg)){
+      userState[id]={};
+      return send(id,"📦 7Star System",kb(MENU));
     }
 
-    if(msg==="service_price"){
+    const db=loadDB();
+    const state=userState[id];
+
+    if(msg==="price"){
       const cats=db.categories.map((c,i)=>({
         label:`📁 ${c.name}`,
         value:`cat_${i}`
       }));
-      await send(userId,"📁 Category",kb(cats));
-      return;
+      return send(id,"📁 Category",kb(cats));
     }
 
-    if(msg==="service_calc"){
-      userState[userId]={mode:"calc"};
+    if(msg==="calc"){
+      userState[id]={mode:"calc"};
       const cats=db.categories.map((c,i)=>({
         label:`📁 ${c.name}`,
         value:`cat_${i}`
       }));
-      await send(userId,"🧮 Category",kb(cats));
-      return;
+      return send(id,"🧮 Category",kb(cats));
     }
 
     if(msg.startsWith("cat_")){
-      const idx=Number(msg.replace("cat_",""));
-      const cat=db.categories[idx];
+      const i=Number(msg.split("_")[1]);
+      const cat=db.categories[i];
       if(!cat) return;
 
-      const items=cat.items.map((it,i)=>({
+      const items=cat.items.map((it,x)=>({
         label:`📄 ${it.item}`,
-        value:`item_${idx}_${i}`
+        value:`item_${i}_${x}`
       }));
 
-      await send(userId,`📁 ${cat.name}`,kb(items));
-      return;
+      return send(id,`📁 ${cat.name}`,kb(items));
     }
 
     if(msg.startsWith("item_")){
-      const p=msg.split("_");
-      const item=db.categories?.[p[1]]?.items?.[p[2]];
+      const [_,c,i]=msg.split("_");
+      const item=db.categories[c]?.items?.[i];
       if(!item) return;
 
-      let text=`📄 ${item.item}\n📏 ${safe(item.size)}\n📦 ${safe(item.gsm)}`;
+      let t=`📄 ${item.item}\n📏 ${item.size||"-"}\n📦 ${item.gsm||"-"}`;
 
-      if(item.noSide){
-        text+=`\n\n💰 Price:\n${formatPrice(item.s1)} Ks`;
-      }else{
-        text+=`\n\n💰 1 Side:\n${formatPrice(item.s1)} Ks\n\n💰 2 Side:\n${formatPrice(item.s2)} Ks`;
-      }
+      t+=`\n\n💰 1 Side: ${item.s1} Ks\n💰 2 Side: ${item.s2} Ks`;
 
-      await send(userId,text);
-      return;
+      return send(id,t);
     }
 
-    await send(userId,"📦 Select Service",kb(SERVICE_MENU));
+    return send(id,"📦 Menu",kb(MENU));
 
-  } catch(e){
-    console.log("WEBHOOK ERROR:", e.message);
+  }catch(e){
+    console.log("WEBHOOK ERROR",e.message);
   }
 });
 
 // =======================================
 const PORT=process.env.PORT||10000;
-app.listen(PORT,()=>console.log("🚀 SYSTEM RUNNING ON",PORT));
+app.listen(PORT,()=>console.log("🚀 RUNNING",PORT));
