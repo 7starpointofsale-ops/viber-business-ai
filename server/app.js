@@ -2,45 +2,65 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const multer = require("multer");
 const FormData = require("form-data");
 
+const upload = multer({ dest: "uploads/" });
 const app = express();
 
 app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 
-// =====================================
-// ENV
-// =====================================
-const TOKEN = process.env.VIBER_TOKEN;
-const REMOVE_BG_KEY = process.env.REMOVE_BG_KEY;
+// ===================== DB =====================
+const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
-// =====================================
-// STATE
-// =====================================
+function ensure(file, fallback) {
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, JSON.stringify(fallback, null, 2));
+  }
+}
+ensure(DB_PATH, { categories: [] });
+
+let cache = null;
+
+function loadDB() {
+  try {
+    cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+    return cache;
+  } catch {
+    return { categories: [] };
+  }
+}
+
+// ===================== STATE =====================
 const userState = {};
 const msgCache = {};
 
-// =====================================
-// MENU
-// =====================================
+// ===================== MENU =====================
 const MENU = [
+  { label: "💰 Price", value: "price" },
+  { label: "🧮 Calc", value: "calc" },
   { label: "🖼 BG Remove", value: "bg" }
 ];
 
-// =====================================
-// SEND
-// =====================================
-async function send(id, text) {
+// ===================== SEND =====================
+async function send(id, text, kb = null) {
   try {
+    const body = {
+      receiver: id,
+      type: "text",
+      text
+    };
+
+    if (kb) body.keyboard = kb;
+
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
+      body,
       {
-        receiver: id,
-        type: "text",
-        text
-      },
-      {
-        headers: { "X-Viber-Auth-Token": TOKEN }
+        headers: {
+          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+        }
       }
     );
   } catch (e) {
@@ -48,136 +68,105 @@ async function send(id, text) {
   }
 }
 
-// =====================================
-// KEYBOARD
-// =====================================
+// ===================== KEYBOARD =====================
 function kb(items) {
   return {
     Type: "keyboard",
     Buttons: items.map(i => ({
-      Columns: 6,
+      Columns: 3,
       Rows: 1,
       ActionType: "reply",
       ActionBody: i.value,
-      Text: i.label
+      BgColor: "#2d3748",
+      Text: `<font color="#fff">${i.label}</font>`
     }))
   };
 }
 
-// =====================================
-// SAFE REMOVE BG (NO CRASH VERSION)
-// =====================================
-async function removeBG(filePath) {
-  try {
-    if (!REMOVE_BG_KEY) {
-      throw new Error("REMOVE_BG_KEY missing");
-    }
+// ===================== REMOVE BG =====================
+async function removeBG(file) {
+  const form = new FormData();
+  form.append("image_file", fs.createReadStream(file));
 
-    const form = new FormData();
-    form.append("image_file", fs.createReadStream(filePath));
-
-    const res = await axios.post(
-      "https://api.remove.bg/v1.0/removebg",
-      form,
-      {
-        responseType: "arraybuffer",
-        headers: {
-          ...form.getHeaders(),
-          "X-Api-Key": REMOVE_BG_KEY
-        },
-        timeout: 20000
+  const res = await axios.post(
+    "https://api.remove.bg/v1.0/removebg",
+    form,
+    {
+      responseType: "arraybuffer",
+      headers: {
+        ...form.getHeaders(),
+        "X-Api-Key": process.env.REMOVE_BG_KEY
       }
-    );
+    }
+  );
 
-    return res.data;
-
-  } catch (e) {
-    console.log("REMOVE BG ERROR:", e.response?.data || e.message);
-    return null;
-  }
+  return res.data;
 }
 
-// =====================================
-// IMAGE HANDLER
-// =====================================
-async function handleImage(body, id) {
+// ===================== IMAGE HANDLER =====================
+async function handleImage(body, userId) {
   try {
     const url = body.message.media;
+
+    if (!url) return send(userId, "❌ No image received");
 
     const img = await axios.get(url, {
       responseType: "arraybuffer"
     });
 
-    const file = path.join(__dirname, "tmp.jpg");
+    const file = path.join(__dirname, "../uploads/tmp.jpg");
     fs.writeFileSync(file, img.data);
 
     const result = await removeBG(file);
 
     fs.unlinkSync(file);
 
-    delete userState[id];
-
-    // ❌ FAIL SAFE
-    if (!result) {
-      return send(id,
-        "❌ BG remove failed\n👉 API key သို့မဟုတ် limit ပြဿနာရှိနိုင်ပါတယ်"
-      );
-    }
-
-    // SUCCESS
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
-        receiver: id,
+        receiver: userId,
         type: "picture",
         media:
           "data:image/png;base64," +
           Buffer.from(result).toString("base64")
       },
       {
-        headers: { "X-Viber-Auth-Token": TOKEN }
+        headers: {
+          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+        }
       }
     );
-
   } catch (e) {
-    console.log("IMAGE ERROR:", e.message);
-    await send(id, "❌ Image processing failed");
+    console.log("BG ERROR:", e.message);
+    await send(userId, "❌ BG remove failed");
   }
 }
 
-// =====================================
-// WEBHOOK
-// =====================================
+// ===================== WEBHOOK =====================
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
   const body = req.body;
   if (!body.event) return;
 
-  const id = body.sender.id;
+  const userId = body.sender.id;
+
+  // anti spam
+  const key = userId + "_" + (body.message?.token || "");
+  if (msgCache[key]) return;
+  msgCache[key] = true;
+
+  setTimeout(() => delete msgCache[key], 30000);
+
   const msg = (body.message?.text || "").toLowerCase().trim();
+  const db = loadDB();
 
-  // cache
-  const token = id + "_" + (body.message?.token || "");
-  if (msgCache[token]) return;
-  msgCache[token] = true;
-  setTimeout(() => delete msgCache[token], 30000);
+  // ================= BG MODE =================
+  if (msg === "bg") {
+    userState[userId] = { mode: "bg" };
 
-  // =====================================
-  // HOME
-  // =====================================
-  if (["hi", "home", "menu"].includes(msg)) {
-    userState[id] = {};
-    return send(id, "📦 7Star BG Bot");
-  }
-
-  // =====================================
-  // BG MODE ON
-  // =====================================
-  if (msg.includes("bg")) {
-    userState[id] = { mode: "bg" };
-
-    return send(id,
+    return send(
+      userId,
 `🖼 BG Mode ON
 
 👉 photo ပို့ပါ
@@ -185,22 +174,25 @@ app.post("/webhook", async (req, res) => {
     );
   }
 
-  // =====================================
-  // IMAGE DETECT
-  // =====================================
-  if (
-    body.message &&
-    body.message.type === "picture" &&
-    body.message.media &&
-    userState[id]?.mode === "bg"
-  ) {
-    return handleImage(body, id);
+  // ================= MENU =================
+  if (["hi", "hello", "home", "menu"].includes(msg)) {
+    return send(userId, "📦 7Star BG Bot", kb(MENU));
   }
 
-  return send(id, "👉 type 'bg'");
+  // ================= PHOTO =================
+  if (body.message?.type === "picture") {
+    if (userState[userId]?.mode === "bg") {
+      return handleImage(body, userId);
+    }
+  }
+
+  // ================= BUTTON =================
+  if (msg === "price") return send(userId, "Price list coming...");
+  if (msg === "calc") return send(userId, "Calc mode...");
+
+  return send(userId, "📦 Menu", kb(MENU));
 });
 
-// =====================================
-app.listen(10000, () => {
-  console.log("🚀 RUNNING ON 10000");
-});
+// ===================== START =====================
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log("🚀 RUNNING ON", PORT));
