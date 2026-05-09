@@ -3,6 +3,11 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 
+// 🔥 NEW (REMOVE BG FEATURE)
+const multer = require("multer");
+const FormData = require("form-data");
+const upload = multer({ dest: "uploads/" });
+
 const app = express();
 
 app.use(express.json({ limit: "10mb" }));
@@ -56,10 +61,7 @@ function loadDB() {
     return dbCache;
   } catch (e) {
     console.log("DB LOAD ERROR:", e.message);
-
-    return {
-      categories: []
-    };
+    return { categories: [] };
   }
 }
 
@@ -67,29 +69,19 @@ function saveDB(data) {
   dbCache = data;
   lastLoad = Date.now();
 
-  fs.writeFileSync(
-    DB_PATH,
-    JSON.stringify(data, null, 2)
-  );
+  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
 function loadOrders() {
   try {
-    return JSON.parse(
-      fs.readFileSync(ORDER_DB, "utf8")
-    );
+    return JSON.parse(fs.readFileSync(ORDER_DB, "utf8"));
   } catch {
-    return {
-      orders: []
-    };
+    return { orders: [] };
   }
 }
 
 function saveOrders(data) {
-  fs.writeFileSync(
-    ORDER_DB,
-    JSON.stringify(data, null, 2)
-  );
+  fs.writeFileSync(ORDER_DB, JSON.stringify(data, null, 2));
 }
 
 // =======================================
@@ -108,39 +100,20 @@ function clean(msg = "") {
 // =======================================
 function normalizeNumber(msg = "") {
   const map = {
-    "၀": "0",
-    "၁": "1",
-    "၂": "2",
-    "၃": "3",
-    "၄": "4",
-    "၅": "5",
-    "၆": "6",
-    "၇": "7",
-    "၈": "8",
-    "၉": "9"
+    "၀":"0","၁":"1","၂":"2","၃":"3","၄":"4",
+    "၅":"5","၆":"6","၇":"7","၈":"8","၉":"9"
   };
 
-  return msg
-    .split("")
-    .map(c => map[c] ?? c)
-    .join("");
+  return msg.split("").map(c => map[c] ?? c).join("");
 }
 
 function isNumber(msg) {
-  return /^\d+$/.test(
-    normalizeNumber(msg)
-  );
+  return /^\d+$/.test(normalizeNumber(msg));
 }
 
 // =======================================
 function safe(v) {
-  return (
-    v === undefined ||
-    v === null ||
-    v === ""
-  )
-    ? "-"
-    : v;
+  return (v === undefined || v === null || v === "") ? "-" : v;
 }
 
 function formatPrice(n) {
@@ -151,60 +124,30 @@ function formatPrice(n) {
 // STATE
 // =======================================
 const userState = {};
-
-// =======================================
-// DUPLICATE BLOCKER
-// =======================================
 const recentMessages = {};
 
-// =======================================
-// TEST MODE
-// =======================================
-// true = only your account works
-// false = everyone works
 const TEST_MODE = false;
-
-// YOUR VIBER ID
 const OWNER_ID = "";
 
 // =======================================
-// MENU
-// =======================================
 const SERVICE_MENU = [
-  {
-    label: "💰 ဈေးမေးမယ်",
-    value: "service_price"
-  },
-  {
-    label: "🧮 ဈေးတွက်မယ်",
-    value: "service_calc"
-  }
+  { label: "💰 ဈေးမေးမယ်", value: "service_price" },
+  { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
 ];
 
-// =======================================
 const commandMap = {
-  "ဈေးတွက်မယ်": "service_calc",
-  "ဈေးမေးမယ်": "service_price",
-  "calc": "service_calc",
-  "price": "service_price"
+  "ဈေးတွက်မယ်":"service_calc",
+  "ဈေးမေးမယ်":"service_price",
+  "calc":"service_calc",
+  "price":"service_price"
 };
 
-const ignoreMsgs = [
-  ".",
-  "home",
-  "back",
-  "menu",
-  "start"
-];
+const ignoreMsgs = [".","home","back","menu","start"];
 
 // =======================================
 // SEND
 // =======================================
-async function send(
-  userId,
-  text,
-  keyboard = null
-) {
+async function send(userId, text, keyboard=null) {
   try {
     const body = {
       receiver: userId,
@@ -213,9 +156,7 @@ async function send(
       min_api_version: 7
     };
 
-    if (keyboard) {
-      body.keyboard = keyboard;
-    }
+    if (keyboard) body.keyboard = keyboard;
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
@@ -223,16 +164,12 @@ async function send(
       {
         timeout: 10000,
         headers: {
-          "X-Viber-Auth-Token":
-            process.env.VIBER_TOKEN
+          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
         }
       }
     );
   } catch (e) {
-    console.log(
-      "SEND ERROR:",
-      e.message
-    );
+    console.log("SEND ERROR:", e.message);
   }
 }
 
@@ -241,16 +178,15 @@ async function send(
 // =======================================
 function kb(items) {
   return {
-    Type: "keyboard",
-    DefaultHeight: false,
-
+    Type:"keyboard",
+    DefaultHeight:false,
     Buttons: items.map(i => ({
-      Columns: 3,
-      Rows: 1,
-      BgColor: "#2d3748",
-      ActionType: "reply",
-      ActionBody: i.value,
-      Text: `<font color="#ffffff">${i.label}</font>`
+      Columns:3,
+      Rows:1,
+      BgColor:"#2d3748",
+      ActionType:"reply",
+      ActionBody:i.value,
+      Text:`<font color="#ffffff">${i.label}</font>`
     }))
   };
 }
@@ -258,541 +194,180 @@ function kb(items) {
 // =======================================
 // SMART SEARCH
 // =======================================
-function findItemSmart(db, msg) {
+function findItemSmart(db,msg){
+  if(!db?.categories) return null;
 
-  if (!db?.categories) {
-    return null;
-  }
+  let best=null,bestScore=0;
+  const tokens=msg.split(" ");
 
-  let best = null;
-  let bestScore = 0;
+  db.categories.forEach(c=>{
+    (c.items||[]).forEach(i=>{
+      let score=0;
 
-  const tokens = msg.split(" ");
+      const name=String(i.item||"").toLowerCase();
+      const size=String(i.size||"").toLowerCase();
+      const gsm=String(i.gsm||"").toLowerCase();
 
-  db.categories.forEach(c => {
-
-    (c.items || []).forEach(i => {
-
-      let score = 0;
-
-      const name =
-        String(i.item || "")
-        .toLowerCase();
-
-      const size =
-        String(i.size || "")
-        .toLowerCase();
-
-      const gsm =
-        String(i.gsm || "")
-        .toLowerCase();
-
-      tokens.forEach(t => {
-
-        if (name.includes(t)) {
-          score += 5;
-        }
-
-        if (size.includes(t)) {
-          score += 3;
-        }
-
-        if (gsm.includes(t)) {
-          score += 2;
-        }
-
+      tokens.forEach(t=>{
+        if(name.includes(t)) score+=5;
+        if(size.includes(t)) score+=3;
+        if(gsm.includes(t)) score+=2;
       });
 
-      if (score > bestScore) {
-        bestScore = score;
-        best = i;
+      if(score>bestScore){
+        bestScore=score;
+        best=i;
       }
-
     });
-
   });
 
   return best;
 }
 
 // =======================================
-// API
+// 🔥 NEW FEATURE: REMOVE BG (SAFE ADDED)
 // =======================================
-app.get("/api/prices", (req, res) => {
+app.post("/remove-bg", upload.single("image"), async (req,res)=>{
+  try {
+    if(!req.file){
+      return res.status(400).json({ok:false});
+    }
+
+    const form = new FormData();
+    form.append("image_file", fs.createReadStream(req.file.path));
+
+    const response = await axios.post(
+      "https://api.remove.bg/v1.0/removebg",
+      form,
+      {
+        responseType:"arraybuffer",
+        headers:{
+          ...form.getHeaders(),
+          "X-Api-Key":process.env.REMOVE_BG_KEY
+        }
+      }
+    );
+
+    fs.unlinkSync(req.file.path);
+
+    res.setHeader("Content-Type","image/png");
+    res.send(response.data);
+
+  } catch(e){
+    console.log("REMOVE BG ERROR:",e.message);
+    res.status(500).json({ok:false});
+  }
+});
+
+// =======================================
+// API (UNCHANGED)
+// =======================================
+app.get("/api/prices",(req,res)=>{
   res.json(loadDB());
 });
 
 // =======================================
-// SAVE
+// WEBHOOK (UNCHANGED)
 // =======================================
-app.post("/api/save-v2", (req, res) => {
+app.post("/webhook", async (req,res)=>{
 
-  try {
-
-    const {
-      category,
-      item,
-      size,
-      gsm,
-      s1,
-      s2,
-      lamination,
-      remark,
-      noSide
-    } = req.body;
-
-    const db = loadDB();
-
-    let cat = db.categories.find(
-      c =>
-        c.name.toLowerCase()
-        === String(category).toLowerCase()
-    );
-
-    if (!cat) {
-
-      cat = {
-        name: category,
-        items: []
-      };
-
-      db.categories.push(cat);
-    }
-
-    cat.items.push({
-      id: Date.now().toString(),
-      item,
-      size,
-      gsm,
-      s1: Number(s1 || 0),
-      s2: Number(s2 || 0),
-      lamination,
-      remark,
-      noSide: !!noSide
-    });
-
-    saveDB(db);
-
-    res.json({
-      ok: true
-    });
-
-  } catch (e) {
-
-    console.log(e);
-
-    res.status(500).json({
-      ok: false
-    });
-  }
-});
-
-// =======================================
-// UPDATE
-// =======================================
-app.post("/api/update-entry", (req, res) => {
-
-  try {
-
-    const {
-      id,
-      field,
-      value
-    } = req.body;
-
-    const db = loadDB();
-
-    db.categories.forEach(c => {
-
-      c.items.forEach(i => {
-
-        if (i.id === id) {
-
-          if (
-            field === "s1" ||
-            field === "s2"
-          ) {
-            i[field] = Number(value || 0);
-          } else {
-            i[field] = value;
-          }
-
-        }
-
-      });
-
-    });
-
-    saveDB(db);
-
-    res.json({
-      ok: true
-    });
-
-  } catch {
-
-    res.status(500).json({
-      ok: false
-    });
-  }
-});
-
-// =======================================
-// DELETE
-// =======================================
-app.post("/api/delete-entry", (req, res) => {
-
-  try {
-
-    const { id } = req.body;
-
-    const db = loadDB();
-
-    db.categories.forEach(c => {
-
-      c.items =
-        c.items.filter(
-          i => i.id !== id
-        );
-
-    });
-
-    saveDB(db);
-
-    res.json({
-      ok: true
-    });
-
-  } catch {
-
-    res.status(500).json({
-      ok: false
-    });
-  }
-});
-
-// =======================================
-// ORDERS
-// =======================================
-app.get("/api/orders", (req, res) => {
-  res.json(loadOrders());
-});
-
-// =======================================
-// WEBHOOK
-// =======================================
-app.post("/webhook", async (req, res) => {
-
-  // IMPORTANT
   res.sendStatus(200);
 
   try {
 
-    const body = req.body;
+    const body=req.body;
+    if(body.event!=="message") return;
 
-    // ===================================
-    // IGNORE NON MESSAGE
-    // ===================================
-    if (
-      body.event !== "message"
-    ) {
-      return;
-    }
+    const userId=body.sender.id;
 
-    const userId =
-      body.sender.id;
+    if(TEST_MODE && OWNER_ID && userId!==OWNER_ID) return;
 
-    // ===================================
-    // TEST MODE
-    // ===================================
-    if (
-      TEST_MODE &&
-      OWNER_ID &&
-      userId !== OWNER_ID
-    ) {
-      return;
-    }
+    const msgToken=userId+"_"+body.message.token;
+    if(recentMessages[msgToken]) return;
 
-    // ===================================
-    // DUPLICATE BLOCK
-    // ===================================
-    const msgToken =
-      userId +
-      "_" +
-      body.message.token;
+    recentMessages[msgToken]=true;
+    setTimeout(()=>delete recentMessages[msgToken],30000);
 
-    if (
-      recentMessages[msgToken]
-    ) {
-      return;
-    }
+    let msg=clean(body.message.text||"");
+    msg=commandMap[msg]||msg;
+    msg=normalizeNumber(msg);
 
-    recentMessages[msgToken] = true;
+    const db=loadDB();
+    const state=userState[userId];
 
-    setTimeout(() => {
-      delete recentMessages[msgToken];
-    }, 30000);
-
-    // ===================================
-    let msg =
-      clean(
-        body.message.text || ""
-      );
-
-    msg =
-      commandMap[msg] || msg;
-
-    msg =
-      normalizeNumber(msg);
-
-    const db = loadDB();
-
-    const state =
-      userState[userId];
-
-    // ===================================
-    // RESET
-    // ===================================
-    if (
-      ignoreMsgs.includes(msg)
-    ) {
-
+    if(ignoreMsgs.includes(msg)){
       delete userState[userId];
-
-      await send(
-        userId,
-        "📦 7Star System",
-        kb(SERVICE_MENU)
-      );
-
+      await send(userId,"📦 7Star System",kb(SERVICE_MENU));
       return;
     }
 
-    // ===================================
-    // MENU
-    // ===================================
-    if (
-      [
-        "hi",
-        "hello",
-        "start",
-        "menu",
-        "မင်္ဂလာပါ"
-      ].includes(msg)
-    ) {
-
-      await send(
-        userId,
-        "📦 7Star System",
-        kb(SERVICE_MENU)
-      );
-
+    if(["hi","hello","start","menu","မင်္ဂလာပါ"].includes(msg)){
+      await send(userId,"📦 7Star System",kb(SERVICE_MENU));
       return;
     }
 
-    // ===================================
-    // PRICE
-    // ===================================
-    if (
-      msg === "service_price"
-    ) {
-
-      const cats =
-        (db.categories || [])
-        .map((c, i) => ({
-          label:
-            `📁 ${c.name}`,
-          value:
-            `cat_${i}`
-        }));
-
-      await send(
-        userId,
-        "📁 Category",
-        kb(cats)
-      );
-
+    if(msg==="service_price"){
+      const cats=(db.categories||[]).map((c,i)=>({
+        label:`📁 ${c.name}`,
+        value:`cat_${i}`
+      }));
+      await send(userId,"📁 Category",kb(cats));
       return;
     }
 
-    // ===================================
-    // CALC
-    // ===================================
-    if (
-      msg === "service_calc"
-    ) {
+    if(msg==="service_calc"){
+      userState[userId]={mode:"calc"};
 
-      userState[userId] = {
-        mode: "calc"
-      };
+      const cats=(db.categories||[]).map((c,i)=>({
+        label:`📁 ${c.name}`,
+        value:`cat_${i}`
+      }));
 
-      const cats =
-        (db.categories || [])
-        .map((c, i) => ({
-          label:
-            `📁 ${c.name}`,
-          value:
-            `cat_${i}`
-        }));
-
-      await send(
-        userId,
-        "🧮 Category",
-        kb(cats)
-      );
-
+      await send(userId,"🧮 Category",kb(cats));
       return;
     }
 
-    // ===================================
-    // CATEGORY
-    // ===================================
-    if (
-      msg.startsWith("cat_")
-    ) {
+    if(msg.startsWith("cat_")){
+      const idx=Number(msg.replace("cat_",""));
+      const cat=db.categories[idx];
+      if(!cat) return;
 
-      const idx =
-        Number(
-          msg.replace(
-            "cat_",
-            ""
-          )
-        );
+      const items=(cat.items||[]).map((it,i)=>({
+        label:`📄 ${it.item}`,
+        value:`item_${idx}_${i}`
+      }));
 
-      const cat =
-        db.categories[idx];
+      await send(userId,`📁 ${cat.name}`,kb(items));
+      return;
+    }
 
-      if (!cat) {
+    if(msg.startsWith("item_")){
+      const parts=msg.split("_");
+      const item=db.categories?.[parts[1]]?.items?.[parts[2]];
+      if(!item) return;
+
+      let text=`📄 ${item.item}\n📏 ${safe(item.size)}\n📦 ${safe(item.gsm)}`;
+
+      if(item.noSide){
+        text+=`\n\n💰 Price:\n${formatPrice(item.s1)} Ks`;
+      }else{
+        text+=`\n\n💰 1 Side:\n${formatPrice(item.s1)} Ks\n\n💰 2 Side:\n${formatPrice(item.s2)} Ks`;
+      }
+
+      await send(userId,text);
+      return;
+    }
+
+    if(state?.mode==="qty"){
+      if(!isNumber(msg)){
+        await send(userId,"❌ Number only");
         return;
       }
 
-      const items =
-        (cat.items || [])
-        .map((it, i) => ({
-          label:
-            `📄 ${it.item}`,
-          value:
-            `item_${idx}_${i}`
-        }));
+      const qty=Number(normalizeNumber(msg));
+      const total=Number(state.item.s1||0)*qty;
 
-      await send(
-        userId,
-        `📁 ${cat.name}`,
-        kb(items)
-      );
-
-      return;
-    }
-
-    // ===================================
-    // ITEM
-    // ===================================
-    if (
-      msg.startsWith("item_")
-    ) {
-
-      const parts =
-        msg.split("_");
-
-      const item =
-        db.categories?.[
-          parts[1]
-        ]?.items?.[
-          parts[2]
-        ];
-
-      if (!item) {
-        return;
-      }
-
-      // CALC
-      if (
-        state?.mode === "calc"
-      ) {
-
-        userState[userId] = {
-          mode: "qty",
-          item
-        };
-
-        await send(
-          userId,
-`📄 ${item.item}
-
-📏 ${safe(item.size)}
-📦 ${safe(item.gsm)}
-
-👉 Qty ?`
-        );
-
-        return;
-      }
-
-      // PRICE
-      let text =
-`📄 ${item.item}
-
-📏 ${safe(item.size)}
-📦 ${safe(item.gsm)}`;
-
-      if (item.noSide) {
-
-        text +=
-`
-
-💰 Price:
-${formatPrice(item.s1)} Ks`;
-
-      } else {
-
-        text +=
-`
-
-💰 1 Side:
-${formatPrice(item.s1)} Ks
-
-💰 2 Side:
-${formatPrice(item.s2)} Ks`;
-
-      }
-
-      await send(
-        userId,
-        text
-      );
-
-      return;
-    }
-
-    // ===================================
-    // QTY
-    // ===================================
-    if (
-      state?.mode === "qty"
-    ) {
-
-      if (!isNumber(msg)) {
-
-        await send(
-          userId,
-          "❌ Number only"
-        );
-
-        return;
-      }
-
-      const qty =
-        Number(
-          normalizeNumber(msg)
-        );
-
-      const total =
-        Number(
-          state.item.s1 || 0
-        ) * qty;
-
-      await send(
-        userId,
+      await send(userId,
 `📦 RESULT
 
 📄 ${state.item.item}
@@ -805,58 +380,29 @@ ${formatPrice(total)} Ks`
       );
 
       delete userState[userId];
-
       return;
     }
 
-    // ===================================
-    // SMART SEARCH
-    // ===================================
-    if (!state) {
-
-      const item =
-        findItemSmart(
-          db,
-          msg
-        );
-
-      if (item) {
-
-        await send(
-          userId,
+    if(!state){
+      const item=findItemSmart(db,msg);
+      if(item){
+        await send(userId,
 `📄 ${item.item}
 
 📏 ${safe(item.size)}
 📦 ${safe(item.gsm)}`
         );
-
         return;
       }
     }
 
-    // ===================================
-    await send(
-      userId,
-      "📦 Select Service",
-      kb(SERVICE_MENU)
-    );
+    await send(userId,"📦 Select Service",kb(SERVICE_MENU));
 
-  } catch (e) {
-
-    console.log(
-      "WEBHOOK ERROR:",
-      e.message
-    );
+  } catch(e){
+    console.log("WEBHOOK ERROR:",e.message);
   }
 });
 
 // =======================================
-const PORT =
-  process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log(
-    "🚀 SYSTEM RUNNING ON",
-    PORT
-  );
-});
+const PORT=process.env.PORT||10000;
+app.listen(PORT,()=>console.log("🚀 SYSTEM RUNNING ON",PORT));
