@@ -2,12 +2,10 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
-
-// 🔥 NEW (REMOVE BG FEATURE)
 const multer = require("multer");
 const FormData = require("form-data");
-const upload = multer({ dest: "uploads/" });
 
+const upload = multer({ dest: "uploads/" });
 const app = express();
 
 app.use(express.json({ limit: "10mb" }));
@@ -25,7 +23,7 @@ const ORDER_DB = path.join(__dirname, "../database/orders.db.json");
 app.use("/admin", express.static(path.join(__dirname, "../admin")));
 
 // =======================================
-// SAFE FILE INIT
+// INIT FILES
 // =======================================
 function ensureFile(file, fallback) {
   if (!fs.existsSync(file)) {
@@ -43,81 +41,17 @@ let dbCache = null;
 let lastLoad = 0;
 
 function loadDB() {
+  const now = Date.now();
+  if (dbCache && now - lastLoad < 3000) return dbCache;
+
   try {
-    const now = Date.now();
-
-    if (dbCache && now - lastLoad < 3000) {
-      return dbCache;
-    }
-
     dbCache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-
-    if (!dbCache.categories) {
-      dbCache.categories = [];
-    }
-
+    if (!dbCache.categories) dbCache.categories = [];
     lastLoad = now;
-
     return dbCache;
-  } catch (e) {
-    console.log("DB LOAD ERROR:", e.message);
+  } catch {
     return { categories: [] };
   }
-}
-
-function saveDB(data) {
-  dbCache = data;
-  lastLoad = Date.now();
-
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-}
-
-function loadOrders() {
-  try {
-    return JSON.parse(fs.readFileSync(ORDER_DB, "utf8"));
-  } catch {
-    return { orders: [] };
-  }
-}
-
-function saveOrders(data) {
-  fs.writeFileSync(ORDER_DB, JSON.stringify(data, null, 2));
-}
-
-// =======================================
-// CLEAN
-// =======================================
-function clean(msg = "") {
-  return msg
-    .replace(/[📁📄💰🧮📦🧾]/g, "")
-    .replace(/\s+/g, " ")
-    .toLowerCase()
-    .trim();
-}
-
-// =======================================
-// NUMBER
-// =======================================
-function normalizeNumber(msg = "") {
-  const map = {
-    "၀":"0","၁":"1","၂":"2","၃":"3","၄":"4",
-    "၅":"5","၆":"6","၇":"7","၈":"8","၉":"9"
-  };
-
-  return msg.split("").map(c => map[c] ?? c).join("");
-}
-
-function isNumber(msg) {
-  return /^\d+$/.test(normalizeNumber(msg));
-}
-
-// =======================================
-function safe(v) {
-  return (v === undefined || v === null || v === "") ? "-" : v;
-}
-
-function formatPrice(n) {
-  return Number(n || 0).toLocaleString();
 }
 
 // =======================================
@@ -126,10 +60,13 @@ function formatPrice(n) {
 const userState = {};
 const recentMessages = {};
 
-const TEST_MODE = false;
-const OWNER_ID = "";
-
 // =======================================
+// TRIGGERS
+// =======================================
+const HOME_TRIGGERS = new Set([
+  "hi","hello","start","menu","home","back","မင်္ဂလာပါ"
+]);
+
 const SERVICE_MENU = [
   { label: "💰 ဈေးမေးမယ်", value: "service_price" },
   { label: "🧮 ဈေးတွက်မယ်", value: "service_calc" }
@@ -142,12 +79,40 @@ const commandMap = {
   "price":"service_price"
 };
 
-const ignoreMsgs = [".","home","back","menu","start"];
+// =======================================
+// CLEAN INPUT
+// =======================================
+function normalizeText(text="") {
+  return text
+    .replace(/\u200B/g,"")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeNumber(msg="") {
+  const map = {
+    "၀":"0","၁":"1","၂":"2","၃":"3","၄":"4",
+    "၅":"5","၆":"6","၇":"7","၈":"8","၉":"9"
+  };
+  return msg.split("").map(c => map[c] ?? c).join("");
+}
+
+function isNumber(msg){
+  return /^\d+$/.test(normalizeNumber(msg));
+}
+
+function formatPrice(n){
+  return Number(n||0).toLocaleString();
+}
+
+function safe(v){
+  return (v===undefined||v===null||v==="") ? "-" : v;
+}
 
 // =======================================
-// SEND
+// SEND VIBER
 // =======================================
-async function send(userId, text, keyboard=null) {
+async function send(userId, text, keyboard=null){
   try {
     const body = {
       receiver: userId,
@@ -156,7 +121,7 @@ async function send(userId, text, keyboard=null) {
       min_api_version: 7
     };
 
-    if (keyboard) body.keyboard = keyboard;
+    if(keyboard) body.keyboard = keyboard;
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
@@ -168,7 +133,7 @@ async function send(userId, text, keyboard=null) {
         }
       }
     );
-  } catch (e) {
+  } catch(e){
     console.log("SEND ERROR:", e.message);
   }
 }
@@ -176,17 +141,17 @@ async function send(userId, text, keyboard=null) {
 // =======================================
 // KEYBOARD
 // =======================================
-function kb(items) {
+function kb(items){
   return {
     Type:"keyboard",
     DefaultHeight:false,
-    Buttons: items.map(i => ({
+    Buttons: items.map(i=>({
       Columns:3,
       Rows:1,
       BgColor:"#2d3748",
       ActionType:"reply",
       ActionBody:i.value,
-      Text:`<font color="#ffffff">${i.label}</font>`
+      Text:`<font color="#fff">${i.label}</font>`
     }))
   };
 }
@@ -204,9 +169,9 @@ function findItemSmart(db,msg){
     (c.items||[]).forEach(i=>{
       let score=0;
 
-      const name=String(i.item||"").toLowerCase();
-      const size=String(i.size||"").toLowerCase();
-      const gsm=String(i.gsm||"").toLowerCase();
+      const name=(i.item||"").toLowerCase();
+      const size=(i.size||"").toLowerCase();
+      const gsm=(i.gsm||"").toLowerCase();
 
       tokens.forEach(t=>{
         if(name.includes(t)) score+=5;
@@ -225,12 +190,12 @@ function findItemSmart(db,msg){
 }
 
 // =======================================
-// 🔥 NEW FEATURE: REMOVE BG (SAFE ADDED)
+// 🔥 REMOVE BG FEATURE (FULL WORKING)
 // =======================================
 app.post("/remove-bg", upload.single("image"), async (req,res)=>{
   try {
     if(!req.file){
-      return res.status(400).json({ok:false});
+      return res.status(400).json({ok:false,error:"no file"});
     }
 
     const form = new FormData();
@@ -254,33 +219,29 @@ app.post("/remove-bg", upload.single("image"), async (req,res)=>{
     res.send(response.data);
 
   } catch(e){
-    console.log("REMOVE BG ERROR:",e.message);
+    console.log("REMOVE BG ERROR:", e.message);
     res.status(500).json({ok:false});
   }
 });
 
 // =======================================
-// API (UNCHANGED)
+// PRICE API
 // =======================================
 app.get("/api/prices",(req,res)=>{
   res.json(loadDB());
 });
 
 // =======================================
-// WEBHOOK (UNCHANGED)
+// WEBHOOK
 // =======================================
 app.post("/webhook", async (req,res)=>{
-
   res.sendStatus(200);
 
   try {
-
     const body=req.body;
     if(body.event!=="message") return;
 
     const userId=body.sender.id;
-
-    if(TEST_MODE && OWNER_ID && userId!==OWNER_ID) return;
 
     const msgToken=userId+"_"+body.message.token;
     if(recentMessages[msgToken]) return;
@@ -288,20 +249,16 @@ app.post("/webhook", async (req,res)=>{
     recentMessages[msgToken]=true;
     setTimeout(()=>delete recentMessages[msgToken],30000);
 
-    let msg=clean(body.message.text||"");
-    msg=commandMap[msg]||msg;
-    msg=normalizeNumber(msg);
+    let msg = normalizeText(body.message.text||"");
+    msg = commandMap[msg] || msg;
+    msg = normalizeNumber(msg);
 
-    const db=loadDB();
-    const state=userState[userId];
+    const db = loadDB();
+    const state = userState[userId];
 
-    if(ignoreMsgs.includes(msg)){
+    // HOME
+    if(HOME_TRIGGERS.has(msg)){
       delete userState[userId];
-      await send(userId,"📦 7Star System",kb(SERVICE_MENU));
-      return;
-    }
-
-    if(["hi","hello","start","menu","မင်္ဂလာပါ"].includes(msg)){
       await send(userId,"📦 7Star System",kb(SERVICE_MENU));
       return;
     }
@@ -342,8 +299,8 @@ app.post("/webhook", async (req,res)=>{
     }
 
     if(msg.startsWith("item_")){
-      const parts=msg.split("_");
-      const item=db.categories?.[parts[1]]?.items?.[parts[2]];
+      const p=msg.split("_");
+      const item=db.categories?.[p[1]]?.items?.[p[2]];
       if(!item) return;
 
       let text=`📄 ${item.item}\n📏 ${safe(item.size)}\n📦 ${safe(item.gsm)}`;
@@ -372,11 +329,9 @@ app.post("/webhook", async (req,res)=>{
 
 📄 ${state.item.item}
 
-📦 Qty:
-${qty}
+📦 Qty: ${qty}
 
-💰 Total:
-${formatPrice(total)} Ks`
+💰 Total: ${formatPrice(total)} Ks`
       );
 
       delete userState[userId];
@@ -399,7 +354,7 @@ ${formatPrice(total)} Ks`
     await send(userId,"📦 Select Service",kb(SERVICE_MENU));
 
   } catch(e){
-    console.log("WEBHOOK ERROR:",e.message);
+    console.log("WEBHOOK ERROR:", e.message);
   }
 });
 
