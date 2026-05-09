@@ -2,12 +2,9 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
-const multer = require("multer");
 const FormData = require("form-data");
 
-const upload = multer({ dest: "uploads/" });
 const app = express();
-
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -17,7 +14,7 @@ app.use(express.urlencoded({ extended: true }));
 const DB_PATH = path.join(__dirname, "../database/price.db.json");
 
 // =======================================
-// INIT FILE
+// INIT DB
 // =======================================
 function ensure(file, fallback) {
   if (!fs.existsSync(file)) {
@@ -111,7 +108,7 @@ function kb(items) {
 }
 
 // =======================================
-// REMOVE BG CORE
+// REMOVE BG
 // =======================================
 async function removeBG(file) {
   const form = new FormData();
@@ -134,25 +131,25 @@ async function removeBG(file) {
 }
 
 // =======================================
-// IMAGE HANDLER
+// IMAGE HANDLER (FIXED)
 // =======================================
 async function handleImage(body, id) {
   try {
     const url = body.message.media;
 
+    if (!url) {
+      return send(id, "❌ Image မရပါ");
+    }
+
     const img = await axios.get(url, {
-      responseType: "arraybuffer",
-      timeout: 20000
+      responseType: "arraybuffer"
     });
 
     const file = path.join(__dirname, "../uploads/tmp.jpg");
     fs.writeFileSync(file, img.data);
 
     const result = await removeBG(file);
-
     fs.unlinkSync(file);
-
-    delete userState[id];
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
@@ -172,7 +169,7 @@ async function handleImage(body, id) {
 
   } catch (e) {
     console.log("BG ERROR:", e.message);
-    await send(id, "❌ BG remove failed");
+    await send(id, "❌ BG Remove Failed");
   }
 }
 
@@ -197,15 +194,14 @@ app.post("/webhook", async (req, res) => {
     const db = loadDB();
 
     // ===================================
-    // BG IMAGE DETECT (SAFE)
+    // IMAGE DETECT (FIXED STABLE)
     // ===================================
-    if (
-      body.message &&
-      (body.message.media || body.message.type === "picture")
-    ) {
-      if (userState[id]?.mode === "bg") {
-        return handleImage(body, id);
-      }
+    const isImage =
+      body.message?.type === "picture" ||
+      body.message?.media;
+
+    if (isImage && userState[id]?.mode === "bg") {
+      return handleImage(body, id);
     }
 
     // ===================================
@@ -216,21 +212,16 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ===================================
-    // BG START (FIXED UX)
+    // BG MODE (FIXED TRIGGER)
     // ===================================
-    if (msg === "bg") {
+    if (msg === "bg" || msg === "🖼 bg remove") {
       userState[id] = { mode: "bg" };
 
-      return send(
-        id,
-`🖼 Background Remove Mode
+      return send(id,
+`🖼 BG Remove Mode ON
 
-👉 လုပ်ရန်:
-1️⃣ Gallery ထဲက photo ရွေးပါ
-2️⃣ Chat ထဲပို့ပါ
-3️⃣ Auto remove လုပ်မယ်
-
-⚠️ Upload popup မပေါ်နိုင်ပါ (Viber limitation)`
+👉 Photo တစ်ပုံပို့ပါ
+👉 Auto background remove လုပ်မယ်`
       );
     }
 
@@ -284,8 +275,7 @@ app.post("/webhook", async (req, res) => {
       const item = db.categories?.[c]?.items?.[i];
       if (!item) return;
 
-      return send(
-        id,
+      return send(id,
 `📄 ${item.item}
 📏 ${item.size || "-"}
 📦 ${item.gsm || "-"}
