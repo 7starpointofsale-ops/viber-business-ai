@@ -7,87 +7,40 @@ const FormData = require("form-data");
 const app = express();
 
 app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
 
-// =======================================
-// PATH
-// =======================================
-const DB_PATH = path.join(__dirname, "../database/price.db.json");
+// =====================================
+// CONFIG
+// =====================================
+const TOKEN = process.env.VIBER_TOKEN;
+const REMOVE_BG_KEY = process.env.REMOVE_BG_KEY;
 
-// =======================================
-// INIT DB
-// =======================================
-function ensure(file, fallback) {
-  if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, JSON.stringify(fallback, null, 2));
-  }
-}
-
-ensure(DB_PATH, { categories: [] });
-
-// =======================================
-// CACHE
-// =======================================
-let cache = null;
-let last = 0;
-
-function loadDB() {
-  const now = Date.now();
-  if (cache && now - last < 3000) return cache;
-
-  try {
-    cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-    if (!cache.categories) cache.categories = [];
-    last = now;
-    return cache;
-  } catch {
-    return { categories: [] };
-  }
-}
-
-// =======================================
+// =====================================
 // STATE
-// =======================================
+// =====================================
 const userState = {};
-const msgCache = {};
+const cache = {};
 
-// =======================================
+// =====================================
 // MENU
-// =======================================
+// =====================================
 const MENU = [
-  { label: "💰 Price", value: "price" },
-  { label: "🧮 Calc", value: "calc" },
   { label: "🖼 BG Remove", value: "bg" }
 ];
 
-// =======================================
-// NORMALIZE
-// =======================================
-function clean(t = "") {
-  return t.replace(/\u200B/g, "").trim().toLowerCase();
-}
-
-// =======================================
-// SEND VIBER
-// =======================================
-async function send(id, text, kb = null) {
+// =====================================
+// SEND
+// =====================================
+async function send(id, text) {
   try {
-    const body = {
-      receiver: id,
-      type: "text",
-      text,
-      min_api_version: 7
-    };
-
-    if (kb) body.keyboard = kb;
-
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
-      body,
       {
-        headers: {
-          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
-        }
+        receiver: id,
+        type: "text",
+        text
+      },
+      {
+        headers: { "X-Viber-Auth-Token": TOKEN }
       }
     );
   } catch (e) {
@@ -95,29 +48,28 @@ async function send(id, text, kb = null) {
   }
 }
 
-// =======================================
+// =====================================
 // KEYBOARD
-// =======================================
+// =====================================
 function kb(items) {
   return {
     Type: "keyboard",
     Buttons: items.map(i => ({
-      Columns: 3,
+      Columns: 6,
       Rows: 1,
       ActionType: "reply",
       ActionBody: i.value,
-      BgColor: "#2d3748",
-      Text: `<font color="#ffffff">${i.label}</font>`
+      Text: i.label
     }))
   };
 }
 
-// =======================================
-// REMOVE BG CORE
-// =======================================
-async function removeBG(file) {
+// =====================================
+// REMOVE BG
+// =====================================
+async function removeBG(filePath) {
   const form = new FormData();
-  form.append("image_file", fs.createReadStream(file));
+  form.append("image_file", fs.createReadStream(filePath));
 
   const res = await axios.post(
     "https://api.remove.bg/v1.0/removebg",
@@ -126,28 +78,26 @@ async function removeBG(file) {
       responseType: "arraybuffer",
       headers: {
         ...form.getHeaders(),
-        "X-Api-Key": process.env.REMOVE_BG_KEY
-      },
-      timeout: 20000
+        "X-Api-Key": REMOVE_BG_KEY
+      }
     }
   );
 
   return res.data;
 }
 
-// =======================================
+// =====================================
 // IMAGE HANDLER
-// =======================================
+// =====================================
 async function handleImage(body, id) {
   try {
     const url = body.message.media;
 
     const img = await axios.get(url, {
-      responseType: "arraybuffer",
-      timeout: 20000
+      responseType: "arraybuffer"
     });
 
-    const file = path.join(__dirname, "../uploads/tmp.jpg");
+    const file = path.join(__dirname, "tmp.jpg");
     fs.writeFileSync(file, img.data);
 
     const result = await removeBG(file);
@@ -166,9 +116,7 @@ async function handleImage(body, id) {
           Buffer.from(result).toString("base64")
       },
       {
-        headers: {
-          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
-        }
+        headers: { "X-Viber-Auth-Token": TOKEN }
       }
     );
 
@@ -178,101 +126,57 @@ async function handleImage(body, id) {
   }
 }
 
-// =======================================
+// =====================================
 // WEBHOOK
-// =======================================
+// =====================================
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
-  try {
-    const body = req.body;
-    if (!body.event) return;
+  const body = req.body;
+  if (!body.event) return;
 
-    const id = body.sender.id;
+  const id = body.sender.id;
 
-    const token = id + "_" + (body.message?.token || "");
-    if (msgCache[token]) return;
-    msgCache[token] = true;
-    setTimeout(() => delete msgCache[token], 30000);
+  const msg = (body.message?.text || "").toLowerCase().trim();
 
-    const msg = clean(body.message?.text || "");
-
-    const db = loadDB();
-
-    // ===================================
-    // IMAGE AUTO DETECT
-    // ===================================
-    if (
-      body.message &&
-      body.message.type === "picture" &&
-      body.message.media &&
-      userState[id]?.mode === "bg"
-    ) {
-      return handleImage(body, id);
-    }
-
-    // ===================================
-    // HOME
-    // ===================================
-    if (["hi", "hello", "home", "menu"].includes(msg)) {
-      delete userState[id];
-      return send(id, "📦 7Star System", kb(MENU));
-    }
-
-    // ===================================
-    // BG MODE FIX
-    // ===================================
-    const bgTriggers = new Set([
-      "bg",
-      "🖼 bg remove",
-      "🖼 bg",
-      "remove bg"
-    ]);
-
-    if (bgTriggers.has(msg)) {
-      userState[id] = { mode: "bg" };
-
-      return send(id,
-`🖼 BG Remove Mode
-
-👉 photo တစ်ပုံပို့ပါ
-👉 auto background ဖျက်မယ်`
-      );
-    }
-
-    // ===================================
-    // PRICE
-    // ===================================
-    if (msg === "price") {
-      const cats = db.categories.map((c, i) => ({
-        label: `📁 ${c.name}`,
-        value: `cat_${i}`
-      }));
-
-      return send(id, "📁 Category", kb(cats));
-    }
-
-    // ===================================
-    // CALC
-    // ===================================
-    if (msg === "calc") {
-      userState[id] = { mode: "calc" };
-
-      const cats = db.categories.map((c, i) => ({
-        label: `📁 ${c.name}`,
-        value: `cat_${i}`
-      }));
-
-      return send(id, "🧮 Category", kb(cats));
-    }
-
-    return send(id, "📦 Menu", kb(MENU));
-
-  } catch (e) {
-    console.log("WEBHOOK ERROR:", e.message);
+  // =================================
+  // HOME
+  // =================================
+  if (msg === "hi" || msg === "home") {
+    userState[id] = {};
+    return send(id, "📦 7Star BG Bot");
   }
+
+  // =================================
+  // BG MODE ENABLE (FIXED)
+  // =================================
+  if (msg.includes("bg")) {
+    userState[id] = { mode: "bg" };
+
+    return send(id,
+`🖼 BG Mode ON
+
+👉 photo ပို့ပါ
+👉 auto remove လုပ်မယ်`
+    );
+  }
+
+  // =================================
+  // IMAGE CHECK (IMPORTANT FIX)
+  // =================================
+  if (
+    body.message &&
+    body.message.type === "picture" &&
+    body.message.media &&
+    userState[id]?.mode === "bg"
+  ) {
+    return handleImage(body, id);
+  }
+
+  return send(id, "👉 type 'bg' to start");
 });
 
-// =======================================
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("🚀 RUNNING ON", PORT));
+// =====================================
+app.listen(10000, () => {
+  console.log("🚀 RUNNING ON 10000");
+});
