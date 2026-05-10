@@ -22,14 +22,12 @@ function ensure(file, fallback) {
 
 ensure(DB_PATH, { categories: [] });
 
-// ===================== CACHE =====================
-let cache = null;
-
+// ===================== LOAD DB =====================
 function loadDB() {
   try {
-    cache = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
-    if (!cache.categories) cache.categories = [];
-    return cache;
+    const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+    if (!db.categories) db.categories = [];
+    return db;
   } catch {
     return { categories: [] };
   }
@@ -47,16 +45,18 @@ const MENU = [
 ];
 
 // ===================== SEND =====================
-async function send(id, text, kb = null) {
+async function send(userId, text, keyboard = null) {
   try {
     const body = {
-      receiver: id,
+      receiver: userId,
       type: "text",
       text,
       min_api_version: 7
     };
 
-    if (kb) body.keyboard = kb;
+    if (keyboard) {
+      body.keyboard = keyboard;
+    }
 
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
@@ -76,23 +76,28 @@ async function send(id, text, kb = null) {
 function kb(items) {
   return {
     Type: "keyboard",
+    DefaultHeight: false,
     Buttons: items.map(i => ({
       Columns: 3,
       Rows: 1,
+      BgColor: "#2d3748",
       ActionType: "reply",
       ActionBody: i.value,
-      BgColor: "#2d3748",
-      Text: `<font color="#fff">${i.label}</font>`
+      Text: `<font color="#ffffff">${i.label}</font>`
     }))
   };
 }
 
 // ===================== REMOVE BG =====================
-async function removeBG(file) {
+async function removeBG(filePath) {
   const form = new FormData();
-  form.append("image_file", fs.createReadStream(file));
 
-  const res = await axios.post(
+  form.append(
+    "image_file",
+    fs.createReadStream(filePath)
+  );
+
+  const response = await axios.post(
     "https://api.remove.bg/v1.0/removebg",
     form,
     {
@@ -105,30 +110,47 @@ async function removeBG(file) {
     }
   );
 
-  return res.data;
+  return response.data;
 }
 
 // ===================== IMAGE HANDLER =====================
 async function handleImage(body, userId) {
   try {
-    const url = body.message?.media;
+    const imageUrl = body.message?.media;
 
-    if (!url) {
-      return send(userId, "❌ Image မရပါ");
+    console.log("TYPE:", body.message?.type);
+    console.log("MEDIA:", imageUrl);
+
+    if (!imageUrl) {
+      return send(userId, "❌ Image not found");
     }
 
-    const img = await axios.get(url, {
+    // download image
+    const image = await axios.get(imageUrl, {
       responseType: "arraybuffer",
       timeout: 20000
     });
 
-    const file = path.join(__dirname, "../uploads/tmp.jpg");
-    fs.writeFileSync(file, img.data);
+    // save temp
+    const tempPath = path.join(
+      __dirname,
+      "../uploads/temp.jpg"
+    );
 
-    const result = await removeBG(file);
+    fs.writeFileSync(tempPath, image.data);
 
-    fs.unlinkSync(file);
+    // remove bg
+    const result = await removeBG(tempPath);
 
+    // delete temp
+    if (fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+
+    // reset state
+    delete userState[userId];
+
+    // send result
     await axios.post(
       "https://chatapi.viber.com/pa/send_message",
       {
@@ -140,65 +162,223 @@ async function handleImage(body, userId) {
       },
       {
         headers: {
-          "X-Viber-Auth-Token": process.env.VIBER_TOKEN
+          "X-Viber-Auth-Token":
+            process.env.VIBER_TOKEN
         }
       }
     );
+
   } catch (e) {
     console.log("BG ERROR:", e.message);
-    await send(userId, "❌ BG remove failed");
+
+    await send(
+      userId,
+      "❌ BG remove failed"
+    );
   }
 }
 
 // ===================== WEBHOOK =====================
 app.post("/webhook", async (req, res) => {
+
   res.sendStatus(200);
 
-  const body = req.body;
-  if (!body.event) return;
+  try {
 
-  const userId = body.sender.id;
+    const body = req.body;
 
-  const token = userId + "_" + (body.message?.token || "");
-  if (msgCache[token]) return;
-  msgCache[token] = true;
-  setTimeout(() => delete msgCache[token], 30000);
+    if (!body.event) return;
 
-  const msg = (body.message?.text || "").toLowerCase().trim();
-  const db = loadDB();
+    const userId = body.sender.id;
 
-  // ================= HOME =================
-  if (["hi", "hello", "home", "menu"].includes(msg)) {
-    return send(userId, "📦 7Star System", kb(MENU));
-  }
+    // anti duplicate
+    const token =
+      userId +
+      "_" +
+      (body.message?.token || "");
 
-  // ================= BG MODE =================
-  if (msg === "bg") {
-    userState[userId] = { mode: "bg" };
+    if (msgCache[token]) return;
 
-    return send(
-      userId,
+    msgCache[token] = true;
+
+    setTimeout(() => {
+      delete msgCache[token];
+    }, 30000);
+
+    // ===================== MESSAGE =====================
+    let msg =
+      (body.message?.text || "")
+        .toLowerCase()
+        .trim();
+
+    // FIX VIBER BUTTON TEXT
+    if (msg.includes("bg")) {
+      msg = "bg";
+    }
+
+    if (msg.includes("price")) {
+      msg = "price";
+    }
+
+    if (msg.includes("calc")) {
+      msg = "calc";
+    }
+
+    if (msg.includes("home")) {
+      msg = "home";
+    }
+
+    if (msg.includes("hi")) {
+      msg = "hi";
+    }
+
+    // ===================== IMAGE DETECT =====================
+    const isImage =
+      body.message?.type === "picture" ||
+      body.message?.type === "file" ||
+      body.message?.media;
+
+    if (
+      isImage &&
+      userState[userId]?.mode === "bg"
+    ) {
+      return handleImage(body, userId);
+    }
+
+    // ===================== HOME =====================
+    if (
+      ["hi", "hello", "home", "menu"]
+        .includes(msg)
+    ) {
+      return send(
+        userId,
+        "📦 7Star System",
+        kb(MENU)
+      );
+    }
+
+    // ===================== BG =====================
+    if (msg === "bg") {
+
+      userState[userId] = {
+        mode: "bg"
+      };
+
+      return send(
+        userId,
 `🖼 BG Mode ON
 
 👉 photo ပို့ပါ
 👉 auto remove လုပ်မယ်`
+      );
+    }
+
+    // ===================== PRICE =====================
+    if (msg === "price") {
+
+      const db = loadDB();
+
+      const cats = db.categories.map(
+        (c, i) => ({
+          label: `📁 ${c.name}`,
+          value: `cat_${i}`
+        })
+      );
+
+      return send(
+        userId,
+        "📁 Category",
+        kb(cats)
+      );
+    }
+
+    // ===================== CALC =====================
+    if (msg === "calc") {
+
+      return send(
+        userId,
+        "🧮 Calc mode..."
+      );
+    }
+
+    // ===================== CATEGORY =====================
+    if (msg.startsWith("cat_")) {
+
+      const db = loadDB();
+
+      const index = Number(
+        msg.replace("cat_", "")
+      );
+
+      const cat = db.categories[index];
+
+      if (!cat) return;
+
+      const items = (cat.items || []).map(
+        (item, i) => ({
+          label: `📄 ${item.item}`,
+          value: `item_${index}_${i}`
+        })
+      );
+
+      return send(
+        userId,
+        `📁 ${cat.name}`,
+        kb(items)
+      );
+    }
+
+    // ===================== ITEM =====================
+    if (msg.startsWith("item_")) {
+
+      const db = loadDB();
+
+      const parts = msg.split("_");
+
+      const catIndex = parts[1];
+      const itemIndex = parts[2];
+
+      const item =
+        db.categories?.[catIndex]
+          ?.items?.[itemIndex];
+
+      if (!item) return;
+
+      return send(
+        userId,
+`📄 ${item.item}
+
+📏 ${item.size || "-"}
+
+📦 ${item.gsm || "-"}
+
+💰 1 Side:
+${item.s1 || 0}
+
+💰 2 Side:
+${item.s2 || 0}`
+      );
+    }
+
+    // ===================== DEFAULT =====================
+    return send(
+      userId,
+      "📦 Menu",
+      kb(MENU)
+    );
+
+  } catch (e) {
+
+    console.log(
+      "WEBHOOK ERROR:",
+      e.message
     );
   }
-
-  // ================= IMAGE =================
-  if (body.message?.type === "picture") {
-    if (userState[userId]?.mode === "bg") {
-      return handleImage(body, userId);
-    }
-  }
-
-  // ================= MENU =================
-  if (msg === "price") return send(userId, "Price list...");
-  if (msg === "calc") return send(userId, "Calc mode...");
-
-  return send(userId, "📦 Menu", kb(MENU));
 });
 
 // ===================== START =====================
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("🚀 RUNNING ON", PORT));
+
+app.listen(PORT, () => {
+  console.log("🚀 RUNNING ON", PORT);
+});
